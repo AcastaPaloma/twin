@@ -108,6 +108,163 @@ async function loginUser(email, phone = '') {
   }
 }
 
+// Sign in user with email or phone
+async function signinUser(identifier) {
+  try {
+    console.log('Attempting signin for:', identifier);
+    
+    // Check if identifier is email or phone
+    const isEmail = identifier.includes('@');
+    const searchField = isEmail ? 'email' : 'phone_number';
+    
+    // Check if user exists in Supabase
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/users?${searchField}=eq.${encodeURIComponent(identifier)}&select=*`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to check user:', errorText);
+      throw new Error('Failed to check user');
+    }
+
+    const users = await response.json();
+    console.log('Found users:', users);
+
+    if (users.length > 0) {
+      // User exists, log them in
+      const user = users[0];
+      console.log('User found, signing in:', user);
+      
+      await setCurrentUser(user);
+      return { success: true, user };
+    } else {
+      throw new Error('User not found. Please sign up first.');
+    }
+  } catch (error) {
+    console.error('Signin error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Sign up new user
+async function signupUser(email, phone) {
+  try {
+    console.log('Attempting signup for:', email, phone);
+    
+    // Check if user already exists with email
+    const emailResponse = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}&select=*`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (emailResponse.ok) {
+      const existingUsers = await emailResponse.json();
+      if (existingUsers.length > 0) {
+        throw new Error('User with this email already exists. Please sign in instead.');
+      }
+    }
+    
+    // Check if user already exists with phone
+    const phoneResponse = await fetch(`${SUPABASE_URL}/rest/v1/users?phone_number=eq.${encodeURIComponent(phone)}&select=*`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (phoneResponse.ok) {
+      const existingUsers = await phoneResponse.json();
+      if (existingUsers.length > 0) {
+        throw new Error('User with this phone number already exists. Please sign in instead.');
+      }
+    }
+    
+    // Create new user
+    const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        email: email,
+        phone_number: phone,
+        is_active: true
+      })
+    });
+
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error('Failed to create user:', errorText);
+      throw new Error('Failed to create user account');
+    }
+
+    const newUsers = await createResponse.json();
+    const newUser = newUsers[0];
+    console.log('New user created:', newUser);
+    
+    await setCurrentUser(newUser);
+    return { success: true, user: newUser };
+  } catch (error) {
+    console.error('Signup error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Update user information
+async function updateUser(email, phone) {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      throw new Error('No user logged in');
+    }
+    
+    console.log('Updating user:', currentUser.id, email, phone);
+    
+    // Update user in Supabase
+    const updateResponse = await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${currentUser.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        email: email,
+        phone_number: phone
+      })
+    });
+
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      console.error('Failed to update user:', errorText);
+      throw new Error('Failed to update user information');
+    }
+
+    const updatedUsers = await updateResponse.json();
+    const updatedUser = updatedUsers[0];
+    console.log('User updated:', updatedUser);
+    
+    await setCurrentUser(updatedUser);
+    return { success: true, user: updatedUser };
+  } catch (error) {
+    console.error('Update user error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Check tracking status
 async function isTrackingEnabled() {
   const result = await chrome.storage.local.get(['trackingEnabled']);
@@ -125,6 +282,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(result);
       }).catch(error => {
         console.error('Login error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Will respond asynchronously
+
+    case 'SIGNIN':
+      signinUser(message.identifier).then(result => {
+        console.log('Signin result:', result);
+        sendResponse(result);
+      }).catch(error => {
+        console.error('Signin error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Will respond asynchronously
+
+    case 'SIGNUP':
+      signupUser(message.email, message.phone).then(result => {
+        console.log('Signup result:', result);
+        sendResponse(result);
+      }).catch(error => {
+        console.error('Signup error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Will respond asynchronously
+
+    case 'UPDATE_USER':
+      updateUser(message.email, message.phone).then(result => {
+        console.log('Update user result:', result);
+        sendResponse(result);
+      }).catch(error => {
+        console.error('Update user error:', error);
         sendResponse({ success: false, error: error.message });
       });
       return true; // Will respond asynchronously

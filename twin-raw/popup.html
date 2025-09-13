@@ -46,6 +46,22 @@
       display: block;
     }
 
+    .settings-form {
+      display: none !important;
+    }
+
+    .settings-form.show {
+      display: block !important;
+    }
+
+    .auth-form {
+      display: block !important;
+    }
+
+    .auth-form.hidden {
+      display: none !important;
+    }
+
     .input-group {
       margin-bottom: 16px;
     }
@@ -205,25 +221,50 @@
   <div class="login-form" id="loginForm">
     <div class="header">
       <h1>Twin Tracker</h1>
-      <p>Sign in to track your activity</p>
+      <p id="authSubtitle">Sign in to track your activity</p>
     </div>
 
     <div id="message" class="message" style="display: none;"></div>
 
-    <form id="loginFormElement">
+    <!-- Sign In Form -->
+    <form id="signinFormElement" class="auth-form">
       <div class="input-group">
-        <label for="email">Email Address</label>
-        <input type="email" id="email" required placeholder="Enter your email">
+        <label for="signinIdentifier">Email or Phone Number</label>
+        <input type="text" id="signinIdentifier" required placeholder="Enter email or phone">
       </div>
 
-      <div class="input-group">
-        <label for="phone">Phone Number (Optional)</label>
-        <input type="tel" id="phone" placeholder="Enter your phone number">
-      </div>
-
-      <button type="submit" class="btn btn-primary" id="loginBtn">
+      <button type="submit" class="btn btn-primary" id="signinBtn">
         Sign In
       </button>
+      
+      <div style="text-align: center; margin-top: 12px;">
+        <a href="#" id="showSignupLink" style="color: #3b82f6; text-decoration: none; font-size: 14px;">
+          Don't have an account? Sign up
+        </a>
+      </div>
+    </form>
+
+    <!-- Sign Up Form -->
+    <form id="signupFormElement" class="auth-form hidden">
+      <div class="input-group">
+        <label for="signupEmail">Email Address</label>
+        <input type="email" id="signupEmail" required placeholder="Enter your email">
+      </div>
+
+      <div class="input-group">
+        <label for="signupPhone">Phone Number</label>
+        <input type="tel" id="signupPhone" required placeholder="Enter your phone number">
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="signupBtn">
+        Sign Up
+      </button>
+      
+      <div style="text-align: center; margin-top: 12px;">
+        <a href="#" id="showSigninLink" style="color: #3b82f6; text-decoration: none; font-size: 14px;">
+          Already have an account? Sign in
+        </a>
+      </div>
     </form>
   </div>
 
@@ -247,9 +288,45 @@
       </div>
     </div>
 
-    <button class="btn btn-secondary" id="logoutBtn">
-      Sign Out
-    </button>
+    <div style="display: flex; gap: 8px; margin-top: 16px;">
+      <button class="btn btn-primary" id="settingsBtn" style="flex: 1; background: #6b7280;">
+        Settings
+      </button>
+      <button class="btn btn-secondary" id="logoutBtn" style="flex: 1;">
+        Sign Out
+      </button>
+    </div>
+  </div>
+
+  <!-- Settings Form -->
+  <div class="settings-form" id="settingsForm">
+    <div class="header">
+      <h1>Settings</h1>
+      <p>Update your account information</p>
+    </div>
+
+    <div id="settingsMessage" class="message" style="display: none;"></div>
+
+    <form id="settingsFormElement">
+      <div class="input-group">
+        <label for="settingsEmail">Email Address</label>
+        <input type="email" id="settingsEmail" required placeholder="Enter your email">
+      </div>
+
+      <div class="input-group">
+        <label for="settingsPhone">Phone Number</label>
+        <input type="tel" id="settingsPhone" required placeholder="Enter your phone number">
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button type="button" class="btn btn-primary" id="cancelSettingsBtn" style="flex: 1; background: #6b7280;">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" id="saveSettingsBtn" style="flex: 1;">
+          Save Changes
+        </button>
+      </div>
+    </form>
   </div>
 
   <script src="popup.js"></script>
