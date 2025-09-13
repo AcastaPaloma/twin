@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      height: 400px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #ffffff;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .header p {
+      margin: 0;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .login-form {
+      display: none;
+    }
+
+    .login-form.show {
+      display: block;
+    }
+
+    .dashboard {
+      display: none;
+    }
+
+    .dashboard.show {
+      display: block;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-primary:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #dc2626;
+    }
+
+    .status-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .status-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .status-info {
+      font-size: 14px;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .toggle-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #d1d5db;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle.on {
+      background: #3b82f6;
+    }
+
+    .toggle-handle {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle.on .toggle-handle {
+      transform: translateX(20px);
+    }
+
+    .message {
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .message.error {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+
+    .message.success {
+      background: #f0fdf4;
+      color: #16a34a;
+      border: 1px solid #bbf7d0;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    Loading...
+  </div>
+
+  <div class="login-form" id="loginForm">
+    <div class="header">
+      <h1>Twin Tracker</h1>
+      <p>Sign in to track your activity</p>
+    </div>
+
+    <div id="message" class="message" style="display: none;"></div>
+
+    <form id="loginFormElement">
+      <div class="input-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" required placeholder="Enter your email">
+      </div>
+
+      <div class="input-group">
+        <label for="phone">Phone Number (Optional)</label>
+        <input type="tel" id="phone" placeholder="Enter your phone number">
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="loginBtn">
+        Sign In
+      </button>
+    </form>
+  </div>
+
+  <div class="dashboard" id="dashboard">
+    <div class="header">
+      <h1>Twin Tracker</h1>
+      <p id="userEmail">user@example.com</p>
+    </div>
+
+    <div class="status-card">
+      <h3>Tracking Status</h3>
+      <div class="status-info" id="statusInfo">
+        Activity tracking is enabled
+      </div>
+
+      <div class="toggle-container">
+        <span class="toggle-label">Track Activity</span>
+        <div class="toggle on" id="trackingToggle">
+          <div class="toggle-handle"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-secondary" id="logoutBtn">
+      Sign Out
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
