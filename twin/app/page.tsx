@@ -1,103 +1,241 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+import React, { useState, useEffect } from 'react'
+
+// Declare chrome global for TypeScript
+declare global {
+  interface Window {
+    chrome: any
+  }
+  var chrome: any
 }
+
+interface User {
+  id: string
+  email: string
+  is_active: boolean
+}
+
+const Home = () => {
+  const [user, setUser] = useState<User | null>(null)
+  const [trackingEnabled, setTrackingEnabled] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  const loadInitialData = async () => {
+    try {
+      // Check if this is running in extension context
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        // Get current user
+        chrome.runtime.sendMessage({ type: 'GET_USER' }, (response: any) => {
+          if (response && response.user) {
+            setUser(response.user)
+          }
+        })
+
+        // Get tracking status
+        chrome.runtime.sendMessage({ type: 'GET_TRACKING_STATUS' }, (response: any) => {
+          if (response) {
+            setTrackingEnabled(response.enabled)
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!loginEmail.trim()) return
+
+    setLoginLoading(true)
+    setMessage('')
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'LOGIN',
+          email: loginEmail.trim()
+        }, (response: any) => {
+          setLoginLoading(false)
+          if (response && response.success) {
+            setUser(response.user)
+            setLoginEmail('')
+            setMessage(response.isNew ? 'Account created and logged in!' : 'Logged in successfully!')
+          } else {
+            setMessage('Login failed: ' + (response?.error || 'Unknown error'))
+          }
+        })
+      } else {
+        setLoginLoading(false)
+        setMessage('Extension not available')
+      }
+    } catch (error) {
+      setLoginLoading(false)
+      setMessage('Login error: ' + error)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'LOGOUT' }, (response: any) => {
+          if (response && response.success) {
+            setUser(null)
+            setMessage('Logged out successfully')
+          }
+        })
+      }
+    } catch (error) {
+      setMessage('Logout error: ' + error)
+    }
+  }
+
+  const toggleTracking = async () => {
+    const newStatus = !trackingEnabled
+    setTrackingEnabled(newStatus)
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'TOGGLE_TRACKING',
+          enabled: newStatus
+        })
+      }
+    } catch (error) {
+      console.error('Error toggling tracking:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="w-80 h-96 p-4 bg-white">
+        <div className="flex items-center justify-center h-full">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-80 h-96 p-4 bg-white">
+      {/* Header */}
+      <div className="mb-4 pb-2 border-b">
+        <h1 className="text-lg font-bold text-gray-800">Twin Tracker</h1>
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div className={`text-xs p-2 rounded mb-3 ${
+          message.includes('error') || message.includes('failed')
+            ? 'bg-red-50 text-red-700 border border-red-200'
+            : 'bg-green-50 text-green-700 border border-green-200'
+        }`}>
+          {message}
+        </div>
+      )}
+
+      {/* Not Logged In */}
+      {!user && (
+        <div className="space-y-4">
+          <div className="text-sm text-gray-600 text-center">
+            Please log in to start tracking your activity
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                required
+                disabled={loginLoading}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading || !loginEmail.trim()}
+              className="w-full bg-blue-500 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {loginLoading ? 'Logging in...' : 'Login / Sign Up'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Logged In */}
+      {user && (
+        <div className="space-y-4">
+          {/* User Info */}
+          <div className="bg-gray-50 p-3 rounded">
+            <div className="text-sm font-medium text-gray-800">Logged in as:</div>
+            <div className="text-sm text-gray-600">{user.email}</div>
+          </div>
+
+          {/* Tracking Status */}
+          <div className="flex items-center justify-between p-3 border border-gray-200 rounded">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-gray-800">Activity Tracking</div>
+              <div className="text-xs text-gray-600">
+                {trackingEnabled ? 'Currently tracking your browsing' : 'Tracking is paused'}
+              </div>
+            </div>
+            <button
+              onClick={toggleTracking}
+              className={`w-12 h-6 rounded-full transition-colors ${
+                trackingEnabled ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                  trackingEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Status Indicator */}
+          <div className={`text-xs p-2 rounded text-center ${
+            trackingEnabled
+              ? 'bg-green-50 text-green-700 border border-green-200'
+              : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+          }`}>
+            {trackingEnabled ? '🟢 Actively tracking searches and browsing' : '⏸️ Tracking paused'}
+          </div>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="w-full bg-gray-500 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-gray-600"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="text-xs text-gray-400 text-center mt-4 pt-2 border-t">
+        Twin v0.0.1 - Activity Tracker
+      </div>
+    </div>
+  )
+}
+
+export default Home

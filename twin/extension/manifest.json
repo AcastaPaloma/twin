@@ -1,9 +1,62 @@
 {
- "name": "twin",
- "version": "0.0.1",
- "manifest_version": 3,
-
- "action": {
-    "default_popup": "index.html"
+  "name": "twin",
+  "version": "0.0.1",
+  "manifest_version": 3,
+  "description": "Track and analyze your search and browsing patterns",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "webNavigation",
+    "history"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/search*",
+        "https://google.com/search*"
+      ],
+      "js": ["content-google.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": ["content-youtube.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": ["content-general.js"],
+      "run_at": "document_end",
+      "exclude_matches": [
+        "https://www.google.com/search*",
+        "https://google.com/search*",
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ]
     }
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Twin - Search Tracker"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["next/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

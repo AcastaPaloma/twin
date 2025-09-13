@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build && move out/_next out/next && robocopy ./extension ./out /E --turbopack",
+    "build": "next build && powershell -Command \"Move-Item out/_next out/next; Get-ChildItem out -Filter *.html | ForEach-Object { (Get-Content $_.FullName) -replace '/_next','./next' | Set-Content $_.FullName }; ./clean-html.ps1; robocopy out/next ./extension/next /MIR\"",
     "copy": "move out/next ./extension/",
     "start": "next start",
     "lint": "eslint"
