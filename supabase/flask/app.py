@@ -100,7 +100,7 @@ def process_user_with_cohere(user_id, user_email=None):
         
         # Get unprocessed activities for this user
         unprocessed_response = supabase.table('activities') \
-            .select('id, timestamp, domain, title') \
+            .select('id, timestamp, domain, title, url') \
             .eq('user_id', user_id) \
             .eq('processed', False) \
             .execute()
@@ -116,13 +116,36 @@ def process_user_with_cohere(user_id, user_email=None):
             print(f"⏩ [{thread_name}] No unprocessed activities for {user_label}, skipping")
             return
             
-        # Create activity descriptions for Cohere
+        # Create detailed activity descriptions for Cohere
         activity_descriptions = []
+        key_urls = []
+        
         for activity in unprocessed_activities:
-            activity_descriptions.append(f"At {activity['timestamp']}, visited {activity['domain']} - {activity['title']}")
+            # Build detailed activity entry with URL for potential future processing
+            activity_entry = f"Time: {activity['timestamp']}\nDomain: {activity['domain']}\nTitle: {activity['title']}\nURL: {activity.get('url', 'N/A')}\n"
+            activity_descriptions.append(activity_entry)
+            
+            # Collect URLs that might be important learning resources
+            if activity.get('url'):
+                key_urls.append(activity['url'])
         
         activity_text = '\n'.join(activity_descriptions)
-        prompt = f"summarize what the user has been doing, focus on what the user has potentially been interested in learning and what they have been learning\n\n{activity_text}"
+        
+        # Optimized prompt for learning focus and key resource identification
+        prompt = f"""Analyze this browsing activity to identify what the user is trying to learn and key resources for future AI analysis:
+
+                {activity_text}
+
+                Focus on:
+                1. MAIN LEARNING TOPICS: What specific subjects/skills is the user studying?
+                2. KEY URLs: List the most valuable URLs for future AI summarization:
+                - YouTube videos (educational/tutorial content)
+                - Documentation sites
+                - Course platforms  
+                - Technical articles/blogs
+                - Learning tools/software
+
+                Prioritize URLs that contain rich educational content that would benefit from AI summarization."""
         
         print(f"🤖 [{thread_name}] Calling Cohere API for {user_label}...")
         
@@ -167,6 +190,14 @@ def process_user_with_cohere(user_id, user_email=None):
             else:
                 summary_text = str(content)
                 summary_content_serializable = [{'type': 'text', 'text': summary_text}]
+        
+        # Extract URLs from the response for future AI processing
+        import re
+        url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+        extracted_urls = list(set(re.findall(url_pattern, summary_text)))
+        
+        # Also include the original key URLs from activities
+        all_key_urls = list(set(key_urls + extracted_urls))
         
         # Convert usage to serializable format
         usage_serializable = None
