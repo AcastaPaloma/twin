@@ -122,6 +122,8 @@ async function analyzeAllUsers(): Promise<string> {
   }
 }
 
+
+
 // Test Cohere connection with a simple prompt
 async function testCohereConnection(): Promise<string> {
   try {
