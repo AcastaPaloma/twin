@@ -4,3 +4,4 @@ export function logResult(result: string) {
   console.log("[AnalyzeAllUsers Result]", result);
   // Optionally, you could show a toast or alert here
 }
+ 
