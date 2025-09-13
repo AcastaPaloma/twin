@@ -7,6 +7,8 @@ import cohere
 import os
 from twilio.rest import Client as TwilioClient
 from dotenv import load_dotenv
+from youtube_transcript_api import YouTubeTranscriptApi
+import re
 
 # Load environment variables from .env file
 load_dotenv()
@@ -79,6 +81,104 @@ def send_sms(message_body: str, to_number: str):
             'error': str(e)
         }
 
+# =============================================================== #
+# Video Transcript
+# =============================================================== #
+
+def get_youtube_transcript(youtube_url: str):
+    """
+    Extract transcript text from a YouTube video URL
+    
+    Args:
+        youtube_url (str): The YouTube video URL
+        
+    Returns:
+        str: The transcript text, or None if extraction fails
+    """
+    try:
+        # Extract video ID from various YouTube URL formats
+        video_id = None
+        patterns = [
+            r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})',
+            r'(?:youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, youtube_url)
+            if match:
+                video_id = match.group(1)
+                break
+        
+        if not video_id:
+            return None
+        
+        # Initialize YouTubeTranscriptApi instance and fetch transcript
+        ytt_api = YouTubeTranscriptApi()
+        fetched_transcript = ytt_api.fetch(video_id)
+        
+        # Extract transcript snippets and combine into full text
+        full_transcript_parts = []
+        for snippet in fetched_transcript.snippets:
+            full_transcript_parts.append(snippet.text)
+        
+        # Return the combined transcript text
+        return ' '.join(full_transcript_parts)
+        
+    except Exception as e:
+        print(f"Error fetching transcript: {str(e)}")
+        return None
+    
+# =============================================================== #
+# Website Scraping Content
+# =============================================================== #
+
+def scrape_website_info(url: str):
+    """
+    Scrape website content and return the body text
+    
+    Args:
+        url (str): The website URL to scrape
+        
+    Returns:
+        str: The website body content as text, or None if scraping fails
+    """
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        # Ensure URL has proper protocol
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        # Set headers to mimic a real browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        # Make request with timeout
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Raise exception for bad status codes
+        
+        # Parse HTML content
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+        
+        # Get text content
+        text = soup.get_text()
+        
+        # Clean up text - remove extra whitespace and newlines
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = ' '.join(chunk for chunk in chunks if chunk)
+        
+        return text
+        
+    except Exception as e:
+        print(f"Error scraping website: {str(e)}")
+        return None
 
 # =============================================================== #
 # Cohere Analytics
@@ -319,6 +419,148 @@ def analyze_single_user_legacy():
         print('💥 Error in single user test:', error)
         return f"Error in single user test: {error}"
 
+# =============================================================== #
+# Cohere Summaries Parsing
+# =============================================================== #
+
+def process_user_summaries():
+    """
+    Iterate through all users and fetch their summaries from the past 24 hours
+    
+    Returns:
+        dict: Contains status and processing results
+    """
+    print("🔍 Starting user summaries processing...")
+    
+    try:
+        # Calculate 24 hours ago timestamp
+        from datetime import datetime, timedelta
+        twenty_four_hours_ago = (datetime.now() - timedelta(hours=24)).isoformat()
+        
+        print(f"📅 Looking for summaries created after: {twenty_four_hours_ago}")
+        
+        # Fetch all users
+        print("📋 Fetching all users...")
+        users_response = supabase.table('users').select('id, email').execute()
+        
+        if users_response.data is None:
+            print('❌ Error fetching users:', users_response)
+            return {'success': False, 'error': 'Error fetching users'}
+            
+        users = users_response.data
+        print(f"✅ Found {len(users)} users to process")
+        
+        if not users:
+            return {'success': True, 'message': 'No users found', 'results': []}
+        
+        results = []
+        
+        # Process each user
+        for user in users:
+            user_id = user['id']
+            user_email = user.get('email', 'No email')
+            user_label = user_email if user_email != 'No email' else user_id[:8] + "..."
+            
+            print(f"🔍 Processing summaries for user: {user_label}")
+            
+            try:
+                # Fetch summaries for this user from the past 24 hours
+                summaries_response = supabase.table('summaries') \
+                    .select('id, user_id, summary, prompt_generated_at, cohere_finish_reason, cohere_usage, source_activity_ids') \
+                    .eq('user_id', user_id) \
+                    .gte('prompt_generated_at', twenty_four_hours_ago) \
+                    .order('prompt_generated_at', desc=True) \
+                    .execute()
+                
+                if summaries_response.data is None:
+                    print(f'❌ Error fetching summaries for {user_label}')
+                    results.append({
+                        'user_id': user_id,
+                        'user_email': user_email,
+                        'success': False,
+                        'error': 'Error fetching summaries',
+                        'summaries_count': 0
+                    })
+                    continue
+                
+                summaries = summaries_response.data
+                summaries_count = len(summaries)
+                
+                print(f"📊 Found {summaries_count} summaries for {user_label} in the past 24 hours")
+                
+                # Process each summary for this user
+                user_result = {
+                    'user_id': user_id,
+                    'user_email': user_email,
+                    'success': True,
+                    'summaries_count': summaries_count,
+                    'summaries': []
+                }
+                
+                for summary in summaries:
+                    # Extract summary text content
+                    summary_text = ""
+                    if summary.get('summary'):
+                        if isinstance(summary['summary'], list):
+                            for item in summary['summary']:
+                                if isinstance(item, dict) and 'text' in item:
+                                    summary_text += item['text']
+                        elif isinstance(summary['summary'], str):
+                            summary_text = summary['summary']
+                    
+                    processed_summary = {
+                        'id': summary['id'],
+                        'prompt_generated_at': summary.get('prompt_generated_at'),
+                        'summary_text': summary_text,
+                        'cohere_finish_reason': summary.get('cohere_finish_reason'),
+                        'cohere_usage': summary.get('cohere_usage'),
+                        'source_activity_count': len(summary.get('source_activity_ids', []))
+                    }
+                    
+                    user_result['summaries'].append(processed_summary)
+                
+                results.append(user_result)
+                
+            except Exception as e:
+                print(f'💥 Error processing summaries for {user_label}: {str(e)}')
+                results.append({
+                    'user_id': user_id,
+                    'user_email': user_email,
+                    'success': False,
+                    'error': str(e),
+                    'summaries_count': 0
+                })
+        
+        # Summary statistics
+        total_summaries = sum(r.get('summaries_count', 0) for r in results)
+        successful_users = len([r for r in results if r.get('success', False)])
+        
+        print(f"🎉 Processing complete!")
+        print(f"📈 Total summaries processed: {total_summaries}")
+        print(f"✅ Successful users: {successful_users}/{len(users)}")
+        
+        return {
+            'success': True,
+            'total_users': len(users),
+            'successful_users': successful_users,
+            'total_summaries': total_summaries,
+            'time_range': f"Past 24 hours (since {twenty_four_hours_ago})",
+            'results': results
+        }
+        
+    except Exception as error:
+        print('💥 Fatal error in process_user_summaries:', error)
+        return {
+            'success': False,
+            'error': f"Fatal error: {error}"
+        }
+
+def cohere_action_testing(): 
+    """
+    Test function for Cohere actions
+    """
+    return "Cohere action testing placeholder"
+
 
 @app.route('/')
 def home():
@@ -352,4 +594,5 @@ def test_endpoint():
 #     app.run(debug=True, host='0.0.0.0', port=3067)
 
 
-analyze_all_users()
+# analyze_all_users()
+# print(scrape_website_info(url="https://example.com"))
