@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Twin Activity Tracker",
+  "description": "Track your browsing activity and save to Supabase database.",
+  "version": "1.0.0",
+  "icons": {
+    "16": "images/icon-16.png",
+    "128": "images/icon-128.png"
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "minimum_chrome_version": "102",
+  "omnibox": {
+    "keyword": "api"
+  },
+  "permissions": [
+    "alarms",
+    "storage",
+    "tabs",
+    "activeTab",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Twin Activity Tracker"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://developer.chrome.com/docs/extensions/reference/*"],
+      "js": ["content.js"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["activity-tracker.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
