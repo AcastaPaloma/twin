@@ -9,8 +9,8 @@
   ],
   "servers": {
     "supabase": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@supabase/mcp-server-supabase@latest", "--read-only", "--project-ref=azukxxbyryqqlagedszg"],
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest", "--read-only", "--project-ref=azukxxbyryqqlagedszg"],
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${input:supabase-access-token}"
       }

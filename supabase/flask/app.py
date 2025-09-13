@@ -34,6 +34,7 @@ def health():
         'twilio_phone': TWILIO_PHONE_NUMBER
     })
 
+<<<<<<< Updated upstream
 @app.route('/api/send-sms', methods=['POST'])
 def send_sms():
     try:
@@ -123,6 +124,9 @@ def test_sms():
             'error': 'Test failed',
             'details': str(e)
         }), 500
+=======
+
+>>>>>>> Stashed changes
 
 @app.route('/api/test', methods=['GET', 'POST'])
 def test_endpoint():
@@ -140,4 +144,4 @@ def test_endpoint():
         })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=3067)
