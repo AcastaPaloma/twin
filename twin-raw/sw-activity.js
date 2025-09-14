@@ -57,6 +57,37 @@ async function saveActivity(activityData) {
   }
 }
 
+// Get last activity from Supabase
+async function getLastActivity() {
+  const user = await getCurrentUser();
+  
+  if (!user) {
+    console.log('No user logged in');
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/activities?user_id=eq.${user.id}&order=timestamp.desc&limit=1`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch last activity:', await response.text());
+      return null;
+    }
+
+    const activities = await response.json();
+    return activities.length > 0 ? activities[0].timestamp : null;
+  } catch (error) {
+    console.error('Error fetching last activity:', error);
+    return null;
+  }
+}
+
 // Handle activity tracking messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -65,6 +96,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       }).catch(error => {
         console.error('Track activity error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Will respond asynchronously
+      
+    case 'GET_LAST_ACTIVITY':
+      console.log('GET_LAST_ACTIVITY message received');
+      getLastActivity().then(lastActivity => {
+        console.log('Last activity retrieved:', lastActivity);
+        sendResponse({ 
+          success: true, 
+          lastActivity: lastActivity 
+        });
+      }).catch(error => {
+        console.error('Get last activity error:', error);
         sendResponse({ success: false, error: error.message });
       });
       return true; // Will respond asynchronously

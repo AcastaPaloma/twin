@@ -338,13 +338,22 @@ async function updateTrackingStatus() {
 
 async function updateLastActivity() {
   try {
+    console.log('Requesting last activity...');
     const response = await chrome.runtime.sendMessage({ type: 'GET_LAST_ACTIVITY' });
+    console.log('Last activity response:', response);
     
     if (response && response.lastActivity) {
       const lastActivityText = document.getElementById('lastActivityText');
       if (lastActivityText) {
         const timeDiff = formatTimeDifference(response.lastActivity);
         lastActivityText.textContent = `Last Activity Tracked ${timeDiff} ago`;
+        console.log('Updated last activity text to:', `Last Activity Tracked ${timeDiff} ago`);
+      }
+    } else {
+      console.log('No last activity found or invalid response');
+      const lastActivityText = document.getElementById('lastActivityText');
+      if (lastActivityText) {
+        lastActivityText.textContent = 'No recent activity found';
       }
     }
   } catch (error) {
