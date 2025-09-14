@@ -604,7 +604,7 @@ To get started, please reply with your email address."""
         error_msg = "Sorry, something went wrong. Please try again."
         send_sms(error_msg, sender_number)
 
-def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_timestamp: str):
+def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_timestamp: str, only_unprocessed: bool = True):
     """
     Retrieve user summaries between two timestamps
     
@@ -612,6 +612,7 @@ def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_tim
         user_id (str): The user ID to fetch summaries for
         start_timestamp (str): Start time in ISO format (inclusive)
         end_timestamp (str): End time in ISO format (inclusive)
+        only_unprocessed (bool): If True, only fetch summaries that haven't been processed yet
         
     Returns:
         dict: Contains user info, summaries, and metadata
@@ -645,7 +646,7 @@ def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_tim
         
         # Fetch summaries for this user within the specified time range
         summaries_response = supabase.table('summaries') \
-            .select('id, user_id, summary, prompt_generated_at, cohere_finish_reason, cohere_usage, source_activity_ids') \
+            .select('id, user_id, summary, prompt_generated_at, cohere_finish_reason, cohere_usage, source_activity_ids, processed') \
             .eq('user_id', user_id) \
             .gte('prompt_generated_at', start_timestamp) \
             .lte('prompt_generated_at', end_timestamp) \
@@ -671,6 +672,7 @@ def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_tim
         
         # Format summaries for easy use
         formatted_summaries = []
+        unprocessed_summaries = []
         all_summaries_text = ""
         
         for summary in summaries:
@@ -690,10 +692,16 @@ def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_tim
                 'summary_text': summary_text,
                 'cohere_finish_reason': summary.get('cohere_finish_reason'),
                 'cohere_usage': summary.get('cohere_usage'),
-                'source_activity_count': len(summary.get('source_activity_ids', []))
+                'source_activity_count': len(summary.get('source_activity_ids', [])),
+                'processed': summary.get('processed', False)
             }
             
             formatted_summaries.append(formatted_summary)
+            
+            # Track unprocessed summaries separately
+            if not summary.get('processed', False):
+                unprocessed_summaries.append(formatted_summary)
+            
             all_summaries_text += f"\n\n--- Summary from {summary.get('prompt_generated_at', 'Unknown time')} ---\n{summary_text}"
         
         return {
@@ -702,7 +710,9 @@ def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_tim
             'user_found': True,
             'user_info': user,
             'summaries_count': summaries_count,
+            'unprocessed_count': len(unprocessed_summaries),
             'summaries': formatted_summaries,
+            'unprocessed_summaries': unprocessed_summaries,
             'combined_summaries_text': all_summaries_text,
             'time_range': f"{start_timestamp} to {end_timestamp}"
         }
@@ -941,13 +951,14 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
 # Cohere Analytics
 # =============================================================== #
 
-def process_user_with_cohere(user_id, user_email=None):
+def process_user_with_cohere(user_id, user_email=None, check_recent_activity=True):
     """
     Process a single user's unprocessed activities with Cohere in a separate thread
     
     Args:
         user_id (str): The user ID to process
         user_email (str): Optional user email for logging
+        check_recent_activity (bool): If True, skip processing if most recent activity was within 60 seconds
     """
     thread_name = threading.current_thread().name
     user_label = user_email or user_id[:8] + "..."
@@ -972,6 +983,41 @@ def process_user_with_cohere(user_id, user_email=None):
         if not unprocessed_activities or len(unprocessed_activities) == 0:
             print(f"⏩ [{thread_name}] No unprocessed activities for {user_label}, skipping")
             return
+        
+        # Check if most recent activity is too recent (within 60 seconds)
+        if check_recent_activity:
+            from datetime import datetime, timezone, timedelta
+            now = datetime.now(timezone.utc)
+            
+            # Find the most recent activity timestamp
+            most_recent_timestamp = None
+            for activity in unprocessed_activities:
+                activity_time_str = activity.get('timestamp')
+                if activity_time_str:
+                    try:
+                        # Parse the timestamp - handle both with and without timezone info
+                        if activity_time_str.endswith('Z'):
+                            activity_time = datetime.fromisoformat(activity_time_str.replace('Z', '+00:00'))
+                        elif '+' in activity_time_str or activity_time_str.endswith('00'):
+                            activity_time = datetime.fromisoformat(activity_time_str)
+                        else:
+                            # Assume UTC if no timezone info
+                            activity_time = datetime.fromisoformat(activity_time_str).replace(tzinfo=timezone.utc)
+                        
+                        if most_recent_timestamp is None or activity_time > most_recent_timestamp:
+                            most_recent_timestamp = activity_time
+                    except Exception as parse_error:
+                        print(f"⚠️ [{thread_name}] Error parsing timestamp '{activity_time_str}': {parse_error}")
+                        continue
+            
+            if most_recent_timestamp:
+                time_since_recent = now - most_recent_timestamp
+                if time_since_recent.total_seconds() < 60:
+                    print(f"⏰ [{thread_name}] Skipping {user_label} - most recent activity was {time_since_recent.total_seconds():.1f} seconds ago (< 60s)")
+                    return
+                else:
+                    print(f"✅ [{thread_name}] Most recent activity for {user_label} was {time_since_recent.total_seconds():.1f} seconds ago, proceeding with processing")
+            
             
         # Create detailed activity descriptions for Cohere
         activity_descriptions = []
@@ -1139,7 +1185,7 @@ def analyze_all_users():
             
             thread = threading.Thread(
                 target=process_user_with_cohere,
-                args=(user['id'], user.get('email')),
+                args=(user['id'], user.get('email')),  # check_recent_activity=True by default
                 name=f"UserThread-{i+1}"
             )
             thread.start()
@@ -1170,7 +1216,7 @@ def analyze_single_user_legacy():
     print(f"� Testing single user analysis for {test_user_id}...")
     
     try:
-        process_user_with_cohere(test_user_id, "test@example.com")
+        process_user_with_cohere(test_user_id, "test@example.com")  # check_recent_activity=True by default
         return f"✅ Single user test completed"
     except Exception as error:
         print('💥 Error in single user test:', error)
@@ -1234,6 +1280,7 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
                 'success': False,
                 'error': 'No phone number available',
                 'summaries_count': 0,
+                'unprocessed_count': 0,
                 'agent_execution': None
             }
             return
@@ -1257,15 +1304,18 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
                 'success': False,
                 'error': user_summaries.get('error', 'Error fetching summaries'),
                 'summaries_count': 0,
+                'unprocessed_count': 0,
                 'agent_execution': None
             }
             return
         
         summaries_count = user_summaries['summaries_count']
+        unprocessed_count = user_summaries['unprocessed_count']
         summaries = user_summaries['summaries']
+        unprocessed_summaries = user_summaries['unprocessed_summaries']
         all_summaries_text = user_summaries['combined_summaries_text']
         
-        print(f"📊 [{thread_name}] Found {summaries_count} summaries for {user_label} in the past 24 hours")
+        print(f"📊 [{thread_name}] Found {summaries_count} total summaries ({unprocessed_count} unprocessed) for {user_label} in the past 24 hours")
         
         # Process each summary for this user
         user_result = {
@@ -1274,13 +1324,14 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
             'user_phone': user_phone,
             'success': True,
             'summaries_count': summaries_count,
+            'unprocessed_count': unprocessed_count,
             'summaries': summaries,  # Already formatted by the new function
             'agent_execution': None
         }
         
-        # Execute Cohere agent if we have summaries to analyze
-        if summaries_count > 0:
-            print(f"🤖 [{thread_name}] Executing Cohere agent for {user_label} with {summaries_count} summaries")
+        # Only execute Cohere agent if we have unprocessed summaries to analyze
+        if unprocessed_count > 0:
+            print(f"🤖 [{thread_name}] Executing Cohere agent for {user_label} with {unprocessed_count} unprocessed summaries")
             
             # Create prompt for the agent to determine what clarification is needed
             agent_prompt = f"""
@@ -1313,6 +1364,26 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
                 print(f"✅ [{thread_name}] Agent execution completed for {user_label}")
                 print(f"📱 [{thread_name}] SMS messages sent: {agent_result.get('sms_count', 0)}")
                 
+                # Mark unprocessed summaries as processed after successful agent execution
+                if agent_result.get('success', False):
+                    try:
+                        unprocessed_ids = [s['id'] for s in unprocessed_summaries]
+                        if unprocessed_ids:
+                            update_response = supabase.table('summaries') \
+                                .update({'processed': True}) \
+                                .in_('id', unprocessed_ids) \
+                                .execute()
+                            
+                            if update_response.data:
+                                print(f"✅ [{thread_name}] Marked {len(unprocessed_ids)} summaries as processed for {user_label}")
+                                user_result['summaries_marked_processed'] = len(unprocessed_ids)
+                            else:
+                                print(f"⚠️ [{thread_name}] Failed to mark summaries as processed for {user_label}")
+                                user_result['summaries_marked_processed'] = 0
+                    except Exception as mark_error:
+                        print(f"❌ [{thread_name}] Error marking summaries as processed for {user_label}: {str(mark_error)}")
+                        user_result['summaries_marked_processed'] = 0
+                
             except Exception as agent_error:
                 print(f"❌ [{thread_name}] Agent execution failed for {user_label}: {str(agent_error)}")
                 user_result['agent_execution'] = {
@@ -1320,7 +1391,7 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
                     'error': str(agent_error)
                 }
         else:
-            print(f"⏩ [{thread_name}] No summaries found for {user_label}, skipping agent execution")
+            print(f"⏩ [{thread_name}] No unprocessed summaries found for {user_label}, skipping agent execution")
         
         results_dict[index] = user_result
         
@@ -1333,6 +1404,7 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
             'success': False,
             'error': str(e),
             'summaries_count': 0,
+            'unprocessed_count': 0,
             'agent_execution': None
         }
 
@@ -1405,23 +1477,29 @@ def process_user_summaries():
         
         # Summary statistics
         total_summaries = sum(r.get('summaries_count', 0) for r in results)
+        total_unprocessed = sum(r.get('unprocessed_count', 0) for r in results)
         successful_users = len([r for r in results if r.get('success', False)])
         successful_agent_executions = len([r for r in results if r.get('agent_execution', {}).get('success', False)])
         total_sms_sent = sum(r.get('agent_execution', {}).get('sms_count', 0) for r in results)
+        total_summaries_marked_processed = sum(r.get('summaries_marked_processed', 0) for r in results)
         
         print(f"🎉 Multi-threaded processing complete!")
-        print(f"📈 Total summaries processed: {total_summaries}")
+        print(f"📈 Total summaries found: {total_summaries}")
+        print(f"🔄 Total unprocessed summaries: {total_unprocessed}")
         print(f"✅ Successful users: {successful_users}/{len(users)}")
         print(f"🤖 Successful agent executions: {successful_agent_executions}")
         print(f"📱 Total SMS messages sent: {total_sms_sent}")
+        print(f"✅ Summaries marked as processed: {total_summaries_marked_processed}")
         
         return {
             'success': True,
             'total_users': len(users),
             'successful_users': successful_users,
             'total_summaries': total_summaries,
+            'total_unprocessed': total_unprocessed,
             'successful_agent_executions': successful_agent_executions,
             'total_sms_sent': total_sms_sent,
+            'summaries_marked_processed': total_summaries_marked_processed,
             'time_range': f"Past 24 hours (since {twenty_four_hours_ago})",
             'results': results
         }

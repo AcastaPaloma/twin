@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 base_url = "https://xubill0707-3689e15b-0967-45ea-96e8-90e448d7f7c9.socketxp.com"
 DELAY_ANALYZE = 10
-DELAY_SUMMARY = 60
+DELAY_SUMMARY = 20
 
 def call_analyze_users():
     """Call the analyze-users endpoint"""
