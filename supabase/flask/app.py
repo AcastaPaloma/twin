@@ -1467,8 +1467,6 @@ if __name__ == '__main__':
         test_process_summaries()
     elif test_mode == "analyze":
         test_analyze_users()
-    elif test_mode == "intelligent":
-        test_intelligent_response()
     elif test_mode == "server":
         app.run(debug=True, host='0.0.0.0', port=3067)
     else:
