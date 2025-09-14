@@ -32,18 +32,19 @@ co = cohere.ClientV2(api_key=COHERE_API_KEY)
 twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 
-def my_periodic_task():
-    print("This runs every 3 seconds!")
+# TODO: MOVE THIS TO A NEW "SERVER" - this server should ONLY BE FOR EXISTING FUNCTIONS
+# def my_periodic_task():
+#     print("This runs every 3 seconds!")
 
-def run_periodic_task():
-    """Background function that runs the periodic task every 3 seconds"""
-    while True:
-        my_periodic_task()
-        time.sleep(3)
+# def run_periodic_task():
+#     """Background function that runs the periodic task every 3 seconds"""
+#     while True:
+#         my_periodic_task()
+#         time.sleep(3)
 
-# Start the periodic task in a background thread
-task_thread = threading.Thread(target=run_periodic_task, daemon=True)
-task_thread.start()
+# # Start the periodic task in a background thread
+# task_thread = threading.Thread(target=run_periodic_task, daemon=True)
+# task_thread.start()
 
 # =============================================================== #
 # Twilio Sendgrid
@@ -420,6 +421,32 @@ def analyze_single_user_legacy():
         print('💥 Error in single user test:', error)
         return f"Error in single user test: {error}"
 
+
+@app.route('/api/analyze-users', methods=['POST'])
+def api_analyze_users():
+    """API endpoint to analyze all users with Cohere"""
+    try:
+        result = analyze_all_users()
+        
+        # analyze_all_users returns a string, so we need to format it properly
+        if result.startswith('✅'):
+            return jsonify({
+                'success': True,
+                'message': result
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': result
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # =============================================================== #
 # Cohere Summaries Parsing
 # =============================================================== #
@@ -546,28 +573,28 @@ def process_user_summaries():
                     
                     # Create prompt for the agent to determine what clarification is needed
                     agent_prompt = f"""
-I have analyzed this user's recent learning activities and generated the following summaries. Please review them and determine what additional clarification, follow-up questions, or deeper insights would be most helpful for their learning journey.
+                        I have analyzed this user's recent learning activities and generated the following summaries. Please review them and determine what additional clarification, follow-up questions, or deeper insights would be most helpful for their learning journey.
 
-User's Recent Learning Summaries (Past 24 hours):
-{all_summaries_text}
+                        User's Recent Learning Summaries (Past 24 hours):
+                        {all_summaries_text}
 
-Your task:
-1. Analyze the learning patterns and topics from these summaries
-2. Identify areas where the user might benefit from clarification, deeper understanding, or follow-up resources
-3. Send targeted SMS messages with:
-   - Specific questions to help them reflect on their learning
-   - Suggestions for related topics they should explore
-   - Resources or next steps that would enhance their understanding
-   - Any gaps in their learning that could be addressed
+                        Your task:
+                        1. Analyze the learning patterns and topics from these summaries
+                        2. Identify areas where the user might benefit from clarification, deeper understanding, or follow-up resources
+                        3. Send targeted SMS messages with:
+                        - Specific questions to help them reflect on their learning
+                        - Suggestions for related topics they should explore
+                        - Resources or next steps that would enhance their understanding
+                        - Any gaps in their learning that could be addressed
 
-Be proactive and helpful - send multiple focused SMS messages (2-4 messages) with actionable insights and questions that will advance their learning. Keep each SMS concise but valuable.
+                        Be proactive and helpful - send multiple focused SMS messages (2-4 messages) with actionable insights and questions that will advance their learning. Keep each SMS concise but valuable.
 
-Focus on being a learning assistant that helps them:
-- Connect concepts they've been studying
-- Identify knowledge gaps
-- Suggest next steps in their learning journey
-- Ask thought-provoking questions about the material they've encountered
-"""
+                        Focus on being a learning assistant that helps them:
+                        - Connect concepts they've been studying
+                        - Identify knowledge gaps
+                        - Suggest next steps in their learning journey
+                        - Ask thought-provoking questions about the material they've encountered
+                        """
 
                     try:
                         agent_result = execute_cohere_agent(agent_prompt, user_phone)
@@ -869,6 +896,7 @@ def home():
         'endpoints': {
             'cohere_agent': '/api/cohere-agent (POST) - Execute agent with custom prompt',
             'process_summaries': '/api/process-summaries (POST) - Process user summaries with agent',
+            'analyze_users': '/api/analyze-users (POST) - Analyze all users with Cohere',
             'health': '/health (GET) - Health check'
         },
         'tools_available': ['send_sms', 'get_youtube_transcript', 'scrape_website_info'],
@@ -883,6 +911,10 @@ def home():
             'process_summaries': {
                 'method': 'POST',
                 'description': 'Process all user summaries and send clarification questions via SMS'
+            },
+            'analyze_users': {
+                'method': 'POST',
+                'description': 'Analyze all users activities with Cohere and generate summaries'
             }
         }
     })
@@ -930,20 +962,30 @@ def test_process_summaries():
     print("🎯 Test result:", result)
     return result
 
-# if __name__ == '__main__':
-#     # Choose what to test
-#     test_mode = "summaries"  # Options: "agent", "summaries", "server"
+def test_analyze_users():
+    """Test the analyze_all_users function"""
+    print("🧪 Testing analyze_all_users function...")
+    result = analyze_all_users()
+    print("🎯 Test result:", result)
+    return result
+
+
+if __name__ == '__main__':
+    # Choose what to test
+    test_mode = "server"  # Options: "agent", "summaries", "analyze", "server"
     
-#     if test_mode == "agent":
-#         print("🧪 Testing Cohere agent...")
-#         result = test_cohere_agent()
-#         print("🎯 Test result:", result)
-#     elif test_mode == "summaries":
-#         test_process_summaries()
-#     elif test_mode == "server":
-#         app.run(debug=True, host='0.0.0.0', port=3067)
-#     else:
-#         print("Invalid test mode. Choose 'agent', 'summaries', or 'server'")
+    if test_mode == "agent":
+        print("🧪 Testing Cohere agent...")
+        result = test_cohere_agent()
+        print("🎯 Test result:", result)
+    elif test_mode == "summaries":
+        test_process_summaries()
+    elif test_mode == "analyze":
+        test_analyze_users()
+    elif test_mode == "server":
+        app.run(debug=True, host='0.0.0.0', port=3067)
+    else:
+        print("Invalid test mode. Choose 'agent', 'summaries', 'analyze', or 'server'")
 
 # Run the summaries test by default
-process_user_summaries()
+# process_user_summaries()
