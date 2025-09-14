@@ -24,7 +24,8 @@
     .header h1 {
       margin: 0 0 8px 0;
       font-size: 20px;
-      font-weight: 600;
+      font-weight: normal;
+      font-style: italic;
       color: #1a1a1a;
     }
 
@@ -68,6 +69,15 @@
     
     .nav-btn:hover {
       color: #333;
+    }
+    
+    .bottom-icon {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      width: 12px;
+      height: 12px;
+      opacity: 0.6;
     }
 
     .dashboard.show {
@@ -324,6 +334,8 @@
     <div style="text-align: center; margin-top: 24px; font-size: 12px; color: #999;" id="lastActivityText">
       Last Activity Tracked 2 hours ago
     </div>
+    
+    <img src="images/icon.png" alt="Twin Icon" class="bottom-icon">
   </div>
 
   <!-- Settings Form -->

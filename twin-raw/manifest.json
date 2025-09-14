@@ -4,8 +4,9 @@
   "description": "Track your browsing activity and save to Supabase database.",
   "version": "1.0.0",
   "icons": {
-    "16": "images/icon-16.png",
-    "128": "images/icon-128.png"
+    "16": "images/icon.png",
+    "48": "images/icon.png",
+    "128": "images/icon.png"
   },
   "background": {
     "service_worker": "service-worker.js",
@@ -28,7 +29,12 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Twin Activity Tracker"
+    "default_title": "Twin Activity Tracker",
+    "default_icon": {
+      "16": "images/icon.png",
+      "48": "images/icon.png",
+      "128": "images/icon.png"
+    }
   },
   "content_scripts": [
     {
