@@ -5,11 +5,15 @@
   <style>
     body {
       width: 320px;
-      height: 400px;
+      min-height: 300px;
+      height: auto;
       margin: 0;
       padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #ffffff;
+      font-family: Georgia, 'Times New Roman', Times, serif;
+      background: #F5F5F7;
+      border: 1px solid #D2D2D2;
+      box-sizing: border-box;
+      position: relative;
     }
 
     .header {
@@ -40,6 +44,30 @@
 
     .dashboard {
       display: none;
+    }
+    
+    .top-nav {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      z-index: 10;
+    }
+    
+    .nav-btn {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 12px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-family: Georgia, 'Times New Roman', Times, serif;
+    }
+    
+    .nav-btn:hover {
+      color: #333;
     }
 
     .dashboard.show {
@@ -124,7 +152,7 @@
     }
 
     .status-card {
-      background: #f8fafc;
+      background: white;
       border: 1px solid #e2e8f0;
       border-radius: 6px;
       padding: 16px;
@@ -147,8 +175,9 @@
     .toggle-container {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
+      justify-content: center;
+      margin-bottom: 0;
+      padding: 16px;
     }
 
     .toggle-label {
@@ -168,7 +197,7 @@
     }
 
     .toggle.on {
-      background: #3b82f6;
+      background: #5ED262;
     }
 
     .toggle-handle {
@@ -269,32 +298,31 @@
   </div>
 
   <div class="dashboard" id="dashboard">
-    <div class="header">
-      <h1>Twin Tracker</h1>
+    <div class="top-nav">
+      <button class="nav-btn" id="settingsBtn">
+        settings
+      </button>
+      <button class="nav-btn" id="logoutBtn">
+        sign out
+      </button>
+    </div>
+    
+    <div class="header" style="margin-top: 40px;">
+      <h1>Twin</h1>
       <p id="userEmail">user@example.com</p>
     </div>
 
     <div class="status-card">
-      <h3>Tracking Status</h3>
-      <div class="status-info" id="statusInfo">
-        Activity tracking is enabled
-      </div>
-
       <div class="toggle-container">
-        <span class="toggle-label">Track Activity</span>
+        <span class="toggle-label" style="margin-right: 16px;">Track Activity</span>
         <div class="toggle on" id="trackingToggle">
           <div class="toggle-handle"></div>
         </div>
       </div>
     </div>
-
-    <div style="display: flex; gap: 8px; margin-top: 16px;">
-      <button class="btn btn-primary" id="settingsBtn" style="flex: 1; background: #6b7280;">
-        Settings
-      </button>
-      <button class="btn btn-secondary" id="logoutBtn" style="flex: 1;">
-        Sign Out
-      </button>
+    
+    <div style="text-align: center; margin-top: 24px; font-size: 12px; color: #999;" id="lastActivityText">
+      Last Activity Tracked 2 hours ago
     </div>
   </div>
 

@@ -29,6 +29,9 @@ async function initializePopup() {
     // Update tracking status
     await updateTrackingStatus();
     
+    // Update last activity
+    await updateLastActivity();
+    
   } catch (error) {
     console.error('Error initializing popup:', error);
     loading.style.display = 'none';
@@ -322,14 +325,50 @@ async function updateTrackingStatus() {
       
       if (response.enabled) {
         toggle.classList.add('on');
-        statusInfo.textContent = 'Activity tracking is enabled';
+        if (statusInfo) statusInfo.textContent = 'Activity tracking is enabled';
       } else {
         toggle.classList.remove('on');
-        statusInfo.textContent = 'Activity tracking is disabled';
+        if (statusInfo) statusInfo.textContent = 'Activity tracking is disabled';
       }
     }
   } catch (error) {
     console.error('Error updating tracking status:', error);
+  }
+}
+
+async function updateLastActivity() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_LAST_ACTIVITY' });
+    
+    if (response && response.lastActivity) {
+      const lastActivityText = document.getElementById('lastActivityText');
+      if (lastActivityText) {
+        const timeDiff = formatTimeDifference(response.lastActivity);
+        lastActivityText.textContent = `Last Activity Tracked ${timeDiff} ago`;
+      }
+    }
+  } catch (error) {
+    console.error('Error updating last activity:', error);
+  }
+}
+
+function formatTimeDifference(timestamp) {
+  const now = new Date();
+  const lastActivity = new Date(timestamp);
+  const diffMs = now - lastActivity;
+  
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMinutes < 1) {
+    return 'just now';
+  } else if (diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+  } else {
+    return `${diffDays} day${diffDays === 1 ? '' : 's'}`;
   }
 }
 
