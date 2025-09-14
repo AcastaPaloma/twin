@@ -6,9 +6,13 @@ import time
 import cohere
 import os
 from twilio.rest import Client as TwilioClient
+from twilio.twiml.messaging_response import MessagingResponse
 from dotenv import load_dotenv
 from youtube_transcript_api import YouTubeTranscriptApi
 import re
+import json
+import logging
+from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -181,6 +185,369 @@ def scrape_website_info(url: str):
     except Exception as e:
         print(f"Error scraping website: {str(e)}")
         return None
+
+# =============================================================== #
+# Util Functions
+# =============================================================== #
+
+def get_user_by_phone_number(phone_number: str):
+    """
+    Get user information by phone number
+    
+    Args:
+        phone_number (str): The phone number to look up
+        
+    Returns:
+        dict: Contains user info and success status
+    """
+    try:
+        print(f"🔍 Looking up user by phone number: {phone_number}")
+        
+        user_response = supabase.table('users') \
+            .select('id, email, phone_number') \
+            .eq('phone_number', phone_number) \
+            .execute()
+        
+        if not user_response.data:
+            print(f"❌ No user found with phone number: {phone_number}")
+            return {
+                'success': False,
+                'error': 'User not found',
+                'phone_number': phone_number,
+                'user_found': False,
+                'user_info': None
+            }
+        
+        user = user_response.data[0]
+        user_email = user.get('email', 'No email')
+        
+        print(f"✅ Found user: {user_email} (ID: {user['id'][:8]}...)")
+        
+        return {
+            'success': True,
+            'phone_number': phone_number,
+            'user_found': True,
+            'user_info': user
+        }
+        
+    except Exception as e:
+        print(f"💥 Error looking up user by phone number {phone_number}: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'phone_number': phone_number,
+            'user_found': False,
+            'user_info': None
+        }
+
+def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_timestamp: str):
+    """
+    Retrieve user summaries between two timestamps
+    
+    Args:
+        user_id (str): The user ID to fetch summaries for
+        start_timestamp (str): Start time in ISO format (inclusive)
+        end_timestamp (str): End time in ISO format (inclusive)
+        
+    Returns:
+        dict: Contains user info, summaries, and metadata
+    """
+    try:
+        print(f"📊 Fetching summaries for user {user_id[:8]}...")
+        print(f"📅 Time range: {start_timestamp} to {end_timestamp}")
+        
+        # Get user info
+        user_response = supabase.table('users') \
+            .select('id, email, phone_number') \
+            .eq('id', user_id) \
+            .execute()
+        
+        if not user_response.data:
+            print(f"❌ No user found with ID: {user_id}")
+            return {
+                'success': False,
+                'error': 'User not found',
+                'user_id': user_id,
+                'user_found': False,
+                'summaries_count': 0,
+                'summaries': []
+            }
+        
+        user = user_response.data[0]
+        user_email = user.get('email', 'No email')
+        user_phone = user.get('phone_number', 'No phone')
+        
+        print(f"✅ Found user: {user_email} (ID: {user_id[:8]}...)")
+        
+        # Fetch summaries for this user within the specified time range
+        summaries_response = supabase.table('summaries') \
+            .select('id, user_id, summary, prompt_generated_at, cohere_finish_reason, cohere_usage, source_activity_ids') \
+            .eq('user_id', user_id) \
+            .gte('prompt_generated_at', start_timestamp) \
+            .lte('prompt_generated_at', end_timestamp) \
+            .order('prompt_generated_at', desc=True) \
+            .execute()
+        
+        if summaries_response.data is None:
+            print(f"❌ Error fetching summaries for user {user_email}")
+            return {
+                'success': False,
+                'error': 'Error fetching summaries',
+                'user_id': user_id,
+                'user_found': True,
+                'user_info': user,
+                'summaries_count': 0,
+                'summaries': []
+            }
+        
+        summaries = summaries_response.data
+        summaries_count = len(summaries)
+        
+        print(f"📈 Found {summaries_count} summaries for {user_email} in specified time range")
+        
+        # Format summaries for easy use
+        formatted_summaries = []
+        all_summaries_text = ""
+        
+        for summary in summaries:
+            # Extract summary text content
+            summary_text = ""
+            if summary.get('summary'):
+                if isinstance(summary['summary'], list):
+                    for item in summary['summary']:
+                        if isinstance(item, dict) and 'text' in item:
+                            summary_text += item['text']
+                elif isinstance(summary['summary'], str):
+                    summary_text = summary['summary']
+            
+            formatted_summary = {
+                'id': summary['id'],
+                'prompt_generated_at': summary.get('prompt_generated_at'),
+                'summary_text': summary_text,
+                'cohere_finish_reason': summary.get('cohere_finish_reason'),
+                'cohere_usage': summary.get('cohere_usage'),
+                'source_activity_count': len(summary.get('source_activity_ids', []))
+            }
+            
+            formatted_summaries.append(formatted_summary)
+            all_summaries_text += f"\n\n--- Summary from {summary.get('prompt_generated_at', 'Unknown time')} ---\n{summary_text}"
+        
+        return {
+            'success': True,
+            'user_id': user_id,
+            'user_found': True,
+            'user_info': user,
+            'summaries_count': summaries_count,
+            'summaries': formatted_summaries,
+            'combined_summaries_text': all_summaries_text,
+            'time_range': f"{start_timestamp} to {end_timestamp}"
+        }
+        
+    except Exception as e:
+        print(f"💥 Error fetching user summaries for {user_id}: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'user_id': user_id,
+            'user_found': False,
+            'summaries_count': 0,
+            'summaries': []
+        }
+
+def get_message_history(phone_number: str, limit: int = 50):
+    """
+    Retrieve previous messages with a specific phone number
+    
+    Args:
+        phone_number (str): The phone number to get message history for
+        limit (int): Maximum number of messages to retrieve (default: 50)
+        
+    Returns:
+        dict: Contains message history and metadata
+    """
+    try:
+        print(f"📞 Fetching message history for {phone_number} (limit: {limit})")
+        
+        # Get messages where this number was either the sender OR recipient
+        # We need to check both directions since messages can go both ways
+        messages_from = twilio_client.messages.list(
+            from_=phone_number,
+            limit=limit
+        )
+        
+        messages_to = twilio_client.messages.list(
+            to=phone_number,
+            limit=limit
+        )
+        
+        # Combine and sort messages by date (most recent first)
+        all_messages = messages_from + messages_to
+        
+        # Remove duplicates and sort by date_created (newest first)
+        unique_messages = {}
+        for msg in all_messages:
+            unique_messages[msg.sid] = msg
+        
+        sorted_messages = sorted(
+            unique_messages.values(),
+            key=lambda x: x.date_created,
+            reverse=True
+        )[:limit]  # Take only the requested limit after sorting
+        
+        # Format message history for easy use
+        formatted_history = []
+        for msg in sorted_messages:
+            formatted_msg = {
+                'sid': msg.sid,
+                'from': msg.from_,
+                'to': msg.to,
+                'body': msg.body,
+                'direction': msg.direction,
+                'status': msg.status,
+                'date_created': msg.date_created.isoformat() if msg.date_created else None,
+                'date_sent': msg.date_sent.isoformat() if msg.date_sent else None,
+                'num_media': msg.num_media
+            }
+            formatted_history.append(formatted_msg)
+        
+        print(f"📊 Found {len(formatted_history)} messages in history with {phone_number}")
+        
+        # Create a summary of the conversation
+        inbound_count = len([m for m in formatted_history if m['direction'] == 'inbound'])
+        outbound_count = len([m for m in formatted_history if m['direction'] in ['outbound-api', 'outbound-call']])
+        
+        return {
+            'success': True,
+            'phone_number': phone_number,
+            'total_messages': len(formatted_history),
+            'inbound_messages': inbound_count,
+            'outbound_messages': outbound_count,
+            'messages': formatted_history,
+            'conversation_summary': {
+                'total_messages': len(formatted_history),
+                'inbound_count': inbound_count,
+                'outbound_count': outbound_count,
+                'last_message_date': formatted_history[0]['date_created'] if formatted_history else None,
+                'first_message_date': formatted_history[-1]['date_created'] if formatted_history else None
+            }
+        }
+        
+    except Exception as e:
+        print(f"💥 Error fetching message history for {phone_number}: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'phone_number': phone_number,
+            'total_messages': 0,
+            'messages': []
+        }
+
+def create_intelligent_response_prompt(incoming_message: str, sender_number: str, message_history: dict = None, user_summaries: dict = None):
+    """
+    Create an intelligent prompt for the Cohere agent to respond to incoming SMS messages
+    
+    Args:
+        incoming_message (str): The current SMS message from the user
+        sender_number (str): The phone number of the sender
+        message_history (dict): Previous conversation history with this user
+        user_summaries (dict): User's recent learning summaries
+        
+    Returns:
+        str: Comprehensive prompt for the Cohere agent
+    """
+    
+    # Build context sections
+    message_context = ""
+    learning_context = ""
+    conversation_context = ""
+    
+    # Add message history context
+    if message_history and message_history.get('success'):
+        total_msgs = message_history.get('total_messages', 0)
+        recent_messages = message_history.get('messages', [])
+        
+        conversation_context = f"""
+            CONVERSATION HISTORY:
+            - Total previous messages with this user: {total_msgs}
+            - Inbound messages: {message_history.get('inbound_messages', 0)}
+            - Outbound messages: {message_history.get('outbound_messages', 0)}
+
+            Recent conversation (most recent first):"""
+        
+        for i, msg in enumerate(recent_messages[:5]):  # Last 5 messages for context
+            direction = "📤 User" if msg['direction'] == 'inbound' else "📥 Assistant"
+            timestamp = msg.get('date_created', 'Unknown time')[:16]  # Just date and time
+            conversation_context += f"\n{i+1}. [{timestamp}] {direction}: {msg['body']}"
+    
+    # Add learning context from summaries
+    if user_summaries and user_summaries.get('success'):
+        summaries_count = user_summaries.get('summaries_count', 0)
+        summaries = user_summaries.get('summaries', [])
+        
+        learning_context = f"""
+        USER'S LEARNING CONTEXT (Past 36 hours):
+        - Total learning summaries available: {summaries_count}
+
+        Recent Learning Topics and Activities:"""
+        
+        for i, summary in enumerate(summaries[:3]):  # Show last 3 summaries
+            timestamp = summary.get('prompt_generated_at', 'Unknown time')[:16]
+            summary_text = summary.get('summary_text', 'No summary available')
+            # Limit summary length for prompt
+            summary_preview = summary_text[:200] + '...' if len(summary_text) > 200 else summary_text
+            learning_context += f"\n{i+1}. [{timestamp}]: {summary_preview}"
+    
+    # Create the comprehensive prompt
+    prompt = f"""You are an intelligent learning assistant responding to an SMS message. Your goal is to provide helpful, contextual responses that support the user's learning journey.
+
+                CURRENT MESSAGE FROM USER:
+                "{incoming_message}"
+                From: {sender_number}
+
+                {conversation_context}
+
+                {learning_context}
+
+                YOUR RESPONSE STRATEGY:
+                Based on the user's message, conversation history, and learning context, you should:
+
+                1. **ANALYZE THE REQUEST**: 
+                - Is this a question about something they've been learning?
+                - Are they asking for help with a specific topic?
+                - Do they want clarification on previous conversations?
+                - Are they sharing new learning goals or interests?
+                - Is this a casual check-in or specific request?
+
+                2. **USE AVAILABLE TOOLS INTELLIGENTLY**:
+                - **send_sms**: Always send at least one SMS response. Send multiple messages if needed to fully address their request
+                - **get_youtube_transcript**: If they mention or ask about a YouTube video, or if getting video content would help answer their question
+                - **scrape_website_info**: If they mention a website, documentation, or if web content would provide better context for their learning
+
+                3. **RESPONSE GUIDELINES**:
+                - Be conversational and friendly (this is SMS, keep it personal)
+                - Reference their previous learning if relevant
+                - Ask follow-up questions to deepen their understanding
+                - Provide actionable insights or next steps
+                - If they're asking about something you don't have context for, offer to help them research it
+                - Keep individual SMS messages concise but comprehensive overall
+                - Connect new topics to their existing learning patterns when possible
+
+                4. **LEARNING FOCUS**:
+                - Help them make connections between concepts
+                - Identify knowledge gaps and suggest resources
+                - Provide practical applications of theoretical concepts
+                - Ask thought-provoking questions about their learning
+
+                5. **CONVERSATION FLOW**:
+                - Acknowledge their current message directly
+                - Build on previous conversations when relevant
+                - Use their learning history to provide more personalized advice
+                - Maintain continuity in your relationship as their learning assistant
+
+                Remember: This is an ongoing conversation with someone who trusts you to help with their learning journey. Be helpful, insightful, and proactive in using tools to provide the best possible assistance.
+                """
+
+    return prompt
 
 # =============================================================== #
 # Cohere Analytics
@@ -506,28 +873,32 @@ def process_user_summaries():
                 continue
             
             try:
-                # Fetch summaries for this user from the past 24 hours
-                summaries_response = supabase.table('summaries') \
-                    .select('id, user_id, summary, prompt_generated_at, cohere_finish_reason, cohere_usage, source_activity_ids') \
-                    .eq('user_id', user_id) \
-                    .gte('prompt_generated_at', twenty_four_hours_ago) \
-                    .order('prompt_generated_at', desc=True) \
-                    .execute()
+                # Calculate timestamps for past 24 hours
+                from datetime import datetime, timedelta, timezone
+                end_time = datetime.now(timezone.utc)
+                start_time = end_time - timedelta(hours=24)
                 
-                if summaries_response.data is None:
-                    print(f'❌ Error fetching summaries for {user_label}')
+                start_timestamp = start_time.isoformat()
+                end_timestamp = end_time.isoformat()
+                
+                # Use the new function to fetch summaries for this user from the past 24 hours
+                user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
+                
+                if not user_summaries['success'] or not user_summaries['user_found']:
+                    print(f'❌ Error fetching summaries for {user_label}: {user_summaries.get("error", "Unknown error")}')
                     results.append({
                         'user_id': user_id,
                         'user_email': user_email,
                         'success': False,
-                        'error': 'Error fetching summaries',
+                        'error': user_summaries.get('error', 'Error fetching summaries'),
                         'summaries_count': 0,
                         'agent_execution': None
                     })
                     continue
                 
-                summaries = summaries_response.data
-                summaries_count = len(summaries)
+                summaries_count = user_summaries['summaries_count']
+                summaries = user_summaries['summaries']
+                all_summaries_text = user_summaries['combined_summaries_text']
                 
                 print(f"📊 Found {summaries_count} summaries for {user_label} in the past 24 hours")
                 
@@ -538,34 +909,9 @@ def process_user_summaries():
                     'user_phone': user_phone,
                     'success': True,
                     'summaries_count': summaries_count,
-                    'summaries': [],
+                    'summaries': summaries,  # Already formatted by the new function
                     'agent_execution': None
                 }
-                
-                all_summaries_text = ""
-                
-                for summary in summaries:
-                    # Extract summary text content
-                    summary_text = ""
-                    if summary.get('summary'):
-                        if isinstance(summary['summary'], list):
-                            for item in summary['summary']:
-                                if isinstance(item, dict) and 'text' in item:
-                                    summary_text += item['text']
-                        elif isinstance(summary['summary'], str):
-                            summary_text = summary['summary']
-                    
-                    processed_summary = {
-                        'id': summary['id'],
-                        'prompt_generated_at': summary.get('prompt_generated_at'),
-                        'summary_text': summary_text,
-                        'cohere_finish_reason': summary.get('cohere_finish_reason'),
-                        'cohere_usage': summary.get('cohere_usage'),
-                        'source_activity_count': len(summary.get('source_activity_ids', []))
-                    }
-                    
-                    user_result['summaries'].append(processed_summary)
-                    all_summaries_text += f"\n\n--- Summary from {summary.get('prompt_generated_at', 'Unknown time')} ---\n{summary_text}"
                 
                 # Execute Cohere agent if we have summaries to analyze
                 if summaries_count > 0:
@@ -887,6 +1233,105 @@ def execute_cohere_agent(user_prompt: str, to_number: str):
             'error': str(e)
         }
 
+# =============================================================== #
+# Twilio API Listen
+# =============================================================== #
+
+@app.route('/sms', methods=['GET', 'POST'])
+def sms_reply():
+    """Handle incoming SMS messages from Twilio webhook"""
+    try:
+        # Get the message data from Twilio's webhook request
+        incoming_msg = request.values.get('Body', '').strip()
+        sender_number = request.values.get('From', '')
+        twilio_number = request.values.get('To', '')
+        message_sid = request.values.get('MessageSid', '')
+        
+        print(f"📱 Received SMS from {sender_number} to {twilio_number}")
+        print(f"📝 Message: {incoming_msg}")
+        print(f"🆔 Message SID: {message_sid}")
+        
+        # Fetch message history with this caller
+        message_history = get_message_history(sender_number, limit=50)
+        
+        if message_history['success']:
+            total_msgs = message_history['total_messages']
+            inbound_count = message_history['inbound_messages']
+            outbound_count = message_history['outbound_messages']
+            
+            print(f"📚 Message History Summary:")
+            print(f"   Total messages with {sender_number}: {total_msgs}")
+            print(f"   Inbound: {inbound_count}, Outbound: {outbound_count}")
+            
+            # Show last few messages for context
+            if message_history['messages']:
+                print(f"📜 Recent conversation history:")
+                for i, msg in enumerate(message_history['messages'][:5]):  # Show last 5 messages
+                    direction_emoji = "📤" if msg['direction'] == 'inbound' else "📥"
+                    print(f"   {i+1}. {direction_emoji} {msg['from']} → {msg['to']}: {msg['body'][:50]}{'...' if len(msg['body']) > 50 else ''}")
+        
+        # Fetch user summaries from the past 36 hours
+        user_lookup = get_user_by_phone_number(sender_number)
+        
+        if user_lookup['success'] and user_lookup['user_found']:
+            # Calculate timestamps for past 36 hours
+            from datetime import datetime, timedelta, timezone
+            end_time = datetime.now(timezone.utc)
+            start_time = end_time - timedelta(hours=36)
+            
+            start_timestamp = start_time.isoformat()
+            end_timestamp = end_time.isoformat()
+            
+            user_id = user_lookup['user_info']['id']
+            user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
+            
+            if user_summaries['success']:
+                summaries_count = user_summaries['summaries_count']
+                user_info = user_lookup['user_info']
+                
+                print(f"🧠 User Learning Context:")
+                print(f"   User: {user_info.get('email', 'No email')} ({sender_number})")
+                print(f"   Learning summaries: {summaries_count} in past 36 hours")
+                
+                # Show recent learning topics
+                if user_summaries['summaries']:
+                    print(f"📝 Recent learning summaries:")
+                    for i, summary in enumerate(user_summaries['summaries'][:3]):  # Show last 3 summaries
+                        summary_preview = summary['summary_text'][:100] + '...' if len(summary['summary_text']) > 100 else summary['summary_text']
+                        print(f"   {i+1}. {summary['prompt_generated_at'][:10]}: {summary_preview}")
+            else:
+                print(f"ℹ️  No learning summaries available for user {user_lookup['user_info']['email']}")
+        else:
+            print(f"ℹ️  No user found for phone number {sender_number}")
+
+
+        # Create intelligent prompt for Cohere agent
+        context_prompt = create_intelligent_response_prompt(
+            incoming_message=incoming_msg,
+            sender_number=sender_number,
+            message_history=message_history if message_history['success'] else None,
+            user_summaries=user_summaries if user_lookup['success'] and user_summaries['success'] else None
+        )
+        
+        # Create a TwiML response
+        resp = MessagingResponse()
+
+        # Don't send immediate response - let agent handle it
+        resp.message(f"your message was: {incoming_msg}")
+
+        # Execute intelligent agent with context
+        execute_cohere_agent(context_prompt, to_number=sender_number)
+
+        print(f"✅ Sending TwiML response back to Twilio")
+        
+        # Return TwiML response
+        return str(resp)
+        
+    except Exception as e:
+        print(f"💥 Error handling SMS webhook: {e}")
+        # Return empty TwiML response in case of error
+        return str(MessagingResponse()), 500
+
 
 @app.route('/')
 def home():
@@ -897,14 +1342,16 @@ def home():
             'cohere_agent': '/api/cohere-agent (POST) - Execute agent with custom prompt',
             'process_summaries': '/api/process-summaries (POST) - Process user summaries with agent',
             'analyze_users': '/api/analyze-users (POST) - Analyze all users with Cohere',
-            'health': '/health (GET) - Health check'
+            'health': '/health (GET) - Health check',
+            'sms_webhook': '/sms (POST) - Twilio SMS webhook'
         },
         'tools_available': ['send_sms', 'get_youtube_transcript', 'scrape_website_info'],
         'usage': {
             'cohere_agent': {
                 'method': 'POST',
                 'payload': {
-                    'prompt': 'Your instruction for the agent...'
+                    'prompt': 'Your instruction for the agent...',
+                    'to_number': '+15145850357 (optional)'
                 },
                 'description': 'Send a prompt/instruction and the agent will intelligently use available tools to fulfill your request'
             },
@@ -918,6 +1365,20 @@ def home():
             }
         }
     })
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'services': {
+            'cohere': 'connected' if COHERE_API_KEY else 'missing_key',
+            'supabase': 'connected' if SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY else 'missing_config',
+            'twilio': 'connected' if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN else 'missing_config'
+        }
+    })
+
 
 @app.route('/api/process-summaries', methods=['POST'])
 def api_process_summaries():
@@ -972,7 +1433,7 @@ def test_analyze_users():
 
 if __name__ == '__main__':
     # Choose what to test
-    test_mode = "server"  # Options: "agent", "summaries", "analyze", "server"
+    test_mode = "server"  # Options: "agent", "summaries", "analyze", "intelligent", "server"
     
     if test_mode == "agent":
         print("🧪 Testing Cohere agent...")
@@ -982,10 +1443,12 @@ if __name__ == '__main__':
         test_process_summaries()
     elif test_mode == "analyze":
         test_analyze_users()
+    elif test_mode == "intelligent":
+        test_intelligent_response()
     elif test_mode == "server":
         app.run(debug=True, host='0.0.0.0', port=3067)
     else:
-        print("Invalid test mode. Choose 'agent', 'summaries', 'analyze', or 'server'")
+        print("Invalid test mode. Choose 'agent', 'summaries', 'analyze', 'intelligent', or 'server'")
 
 # Run the summaries test by default
 # process_user_summaries()
