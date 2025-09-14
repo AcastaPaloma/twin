@@ -1637,24 +1637,32 @@ def process_user_summaries():
         # Convert results dict to list (preserving original order)
         results = [results_dict[i] for i in range(len(users)) if i in results_dict]
         
-        # Summary statistics
-        total_summaries = sum(r.get('summaries_count', 0) for r in results)
-        total_unprocessed = sum(r.get('unprocessed_count', 0) for r in results)
-        successful_users = len([r for r in results if r.get('success', False)])
-        successful_agent_executions = len([r for r in results if r.get('agent_execution', {}).get('success', False)])
-        total_sms_sent = sum(r.get('agent_execution', {}).get('sms_count', 0) for r in results)
-        total_summaries_marked_processed = sum(r.get('summaries_marked_processed', 0) for r in results)
+        # Check for any missing results due to thread failures
+        missing_results = len(users) - len(results_dict)
+        if missing_results > 0:
+            print(f"⚠️ Warning: {missing_results} users had no results (possible thread failures)")
         
-        # Track smart messaging decisions
-        users_with_unprocessed = len([r for r in results if r.get('unprocessed_count', 0) > 0])
-        agent_decided_to_message = len([r for r in results if r.get('agent_execution', {}).get('sms_count', 0) > 0])
+        # Summary statistics - filter out any None results from threading issues
+        valid_results = [r for r in results if r is not None]
+        if len(valid_results) < len(results):
+            print(f"⚠️ Warning: Filtered out {len(results) - len(valid_results)} None results")
+        total_summaries = sum(r.get('summaries_count', 0) for r in valid_results)
+        total_unprocessed = sum(r.get('unprocessed_count', 0) for r in valid_results)
+        successful_users = len([r for r in valid_results if r.get('success', False)])
+        successful_agent_executions = len([r for r in valid_results if r.get('agent_execution', {}) is not None and r.get('agent_execution', {}).get('success', False)])
+        total_sms_sent = sum(r.get('agent_execution', {}).get('sms_count', 0) if r.get('agent_execution') is not None else 0 for r in valid_results)
+        total_summaries_marked_processed = sum(r.get('summaries_marked_processed', 0) for r in valid_results)
+        
+        # Track smart messaging decisions - use valid_results
+        users_with_unprocessed = len([r for r in valid_results if r.get('unprocessed_count', 0) > 0])
+        agent_decided_to_message = len([r for r in valid_results if r.get('agent_execution', {}) is not None and r.get('agent_execution', {}).get('sms_count', 0) > 0])
         agent_decided_to_skip = successful_agent_executions - agent_decided_to_message
-        total_message_history_entries = sum(r.get('message_history_count', 0) for r in results)
+        total_message_history_entries = sum(r.get('message_history_count', 0) for r in valid_results)
         
         print(f"🎉 Multi-threaded processing complete!")
         print(f"📈 Total summaries found: {total_summaries}")
         print(f"🔄 Total unprocessed summaries: {total_unprocessed}")
-        print(f"✅ Successful users: {successful_users}/{len(users)}")
+        print(f"✅ Successful users: {successful_users}/{len(valid_results)} (processed {len(valid_results)}/{len(users)} total users)")
         print(f"🤖 Successful agent executions: {successful_agent_executions}")
         print(f"📱 Agent decided to send messages: {agent_decided_to_message}/{users_with_unprocessed} users with new content")
         print(f"🤐 Agent decided to skip messaging: {agent_decided_to_skip} (smart filtering)")
@@ -1665,6 +1673,7 @@ def process_user_summaries():
         return {
             'success': True,
             'total_users': len(users),
+            'processed_users': len(valid_results),
             'successful_users': successful_users,
             'total_summaries': total_summaries,
             'total_unprocessed': total_unprocessed,
@@ -1676,14 +1685,18 @@ def process_user_summaries():
             'total_message_history_entries': total_message_history_entries,
             'summaries_marked_processed': total_summaries_marked_processed,
             'time_range': f"Past 24 hours (since {twenty_four_hours_ago})",
-            'results': results
+            'results': valid_results
         }
         
     except Exception as error:
+        import traceback
+        error_details = traceback.format_exc()
         print('💥 Fatal error in process_user_summaries:', error)
+        print('📍 Error traceback:', error_details)
         return {
             'success': False,
-            'error': f"Fatal error: {error}"
+            'error': f"Fatal error: {str(error)}",
+            'traceback': error_details
         }
 
 # =============================================================== #
