@@ -523,21 +523,21 @@ def handle_onboarding_flow(incoming_msg: str, sender_number: str, gate_status: d
             result = create_new_user(sender_number)
             
             if result['success']:
-                # Send welcome message
-                welcome_msg = """👋 Welcome to Twin! I'm your intelligent learning assistant that tracks your browsing to help you learn better.
-
-I analyze your web activity and send personalized learning insights via SMS.
-
-To get started, please reply with your email address."""
+                # Send welcome messages - broken into multiple texts
+                welcome_msg1 = "yo! welcome to Twin 👋"
+                welcome_msg2 = "I'm your AI learning buddy who tracks what you browse and sends you helpful insights ✨"
+                welcome_msg3 = "to get started, just send me your email!"
                 
-                send_result = send_sms(welcome_msg, sender_number)
+                send_sms(welcome_msg1, sender_number)
+                send_sms(welcome_msg2, sender_number) 
+                send_result = send_sms(welcome_msg3, sender_number)
                 if send_result['success']:
-                    print("✅ Welcome message sent successfully")
+                    print("✅ Welcome messages sent successfully")
                 else:
                     print(f"❌ Failed to send welcome message: {send_result}")
             else:
                 # Send error message
-                error_msg = "Sorry, there was an issue setting up your account. Please try again later."
+                error_msg = "oof something went wrong setting up your account 😅 try again?"
                 send_sms(error_msg, sender_number)
                 print(f"❌ Failed to create user: {result}")
         
@@ -553,7 +553,7 @@ To get started, please reply with your email address."""
                 
                 if result['success']:
                     # Send name request message
-                    name_request_msg = "✨ Perfect! Last step - what's your name? This helps me personalize your learning experience."
+                    name_request_msg = "nice! ✨ last thing - what's your name? helps me personalize everything for you"
                     
                     send_result = send_sms(name_request_msg, sender_number)
                     if send_result['success']:
@@ -562,12 +562,12 @@ To get started, please reply with your email address."""
                         print(f"❌ Failed to send name request: {send_result}")
                 else:
                     # Send error message
-                    error_msg = "Sorry, there was an issue saving your email. Please try again."
+                    error_msg = "hmm something went wrong saving that email 🤔 try again?"
                     send_sms(error_msg, sender_number)
                     print(f"❌ Failed to update email: {result}")
             else:
                 # Invalid email format
-                invalid_email_msg = "❌ That email format doesn't look right. Please send a valid email address (example: you@gmail.com)"
+                invalid_email_msg = "that email looks a bit off 📧 can you send it again? (like you@gmail.com)"
                 
                 send_result = send_sms(invalid_email_msg, sender_number)
                 if send_result['success']:
@@ -586,22 +586,26 @@ To get started, please reply with your email address."""
                 result = update_user_name(user_id, name)
                 
                 if result['success']:
-                    # Send completion message
-                    completion_msg = f"🎉 All set, {name}! I'm now your personal learning assistant. I'll track your browsing patterns and send helpful insights.\n\nTry sending me a YouTube video or website URL to get started!"
+                    # Send completion messages - broken into multiple texts
+                    completion_msg1 = f"yesss {name}! we're all set 🎉"
+                    completion_msg2 = "I'm now tracking your learning and will send you helpful insights"
+                    completion_msg3 = "send me a YouTube video or website URL to test it out!"
                     
-                    send_result = send_sms(completion_msg, sender_number)
+                    send_sms(completion_msg1, sender_number)
+                    send_sms(completion_msg2, sender_number)
+                    send_result = send_sms(completion_msg3, sender_number)
                     if send_result['success']:
-                        print("✅ Onboarding completion message sent successfully")
+                        print("✅ Onboarding completion messages sent successfully")
                     else:
                         print(f"❌ Failed to send completion message: {send_result}")
                 else:
                     # Send error message
-                    error_msg = "Sorry, there was an issue saving your name. Please try again."
+                    error_msg = "hmm couldn't save that name 😅 try again?"
                     send_sms(error_msg, sender_number)
                     print(f"❌ Failed to update name: {result}")
             else:
                 # Empty name
-                empty_name_msg = "Please tell me your name so I can personalize your experience."
+                empty_name_msg = "what should I call you? 😊"
                 
                 send_result = send_sms(empty_name_msg, sender_number)
                 if send_result['success']:
@@ -615,7 +619,7 @@ To get started, please reply with your email address."""
     except Exception as e:
         print(f"💥 Error in handle_onboarding_flow: {e}")
         # Send generic error message
-        error_msg = "Sorry, something went wrong. Please try again."
+        error_msg = "oops something went wrong 😅 try again?"
         send_sms(error_msg, sender_number)
 
 def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_timestamp: str, only_unprocessed: bool = True):
@@ -887,92 +891,63 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
             learning_context += f"\n{i+1}. [{timestamp}]: {summary_preview}"
     
     # Create the comprehensive prompt
-    prompt = f"""You are an intelligent learning assistant responding to an SMS message. Your goal is to provide helpful, contextual responses that support the user's learning journey.
+    prompt = f"""You're a friendly learning buddy who texts like a Gen Z/millennial. Help them learn stuff through quick, digestible texts.
 
-                CURRENT MESSAGE FROM USER:
-                "{incoming_message}"
-                From: {sender_number}
+                CURRENT TEXT: "{incoming_message}"
+                FROM: {sender_number}
 
                 {conversation_context}
 
                 {learning_context}
 
-                CRITICAL WORKFLOW RULES:
-                1. **ALWAYS END WITH SMS**: Every interaction MUST conclude with at least one send_sms call to respond to the user
-                2. **CONNECT RECENT MESSAGES**: Look at the most recent 2-3 messages to understand context. If the user previously asked a question and now provides a URL/resource, treat them as connected
-                3. **COMPLETE THE REQUEST**: If you use tools like get_youtube_transcript or scrape_website_info, you MUST then send SMS messages that address the original request with the gathered information
-                4. **USE LEARNING CONTEXT**: You HAVE ACCESS to the user's detailed browsing history with URLs, titles, and timestamps in the learning context above. When users ask about their browsing history, visited websites, or learning resources, reference this data directly.
+                CORE RULES:
+                1. ALWAYS text back with send_sms
+                2. Connect their recent messages (they might send a question then a link)
+                3. Use tools (get_youtube_transcript, scrape_website_info) then text the findings
+                4. Check their learning history above for context about what they've studied
 
-                YOUR RESPONSE STRATEGY:
-                Based on the user's message, conversation history, and learning context, you should:
+                TEXTING STYLE:
+                - Break info into multiple short texts (like actual texting)
+                - Use casual language: "lol", "tbh", "ngl", "btw", "fr"
+                - Emojis are your friend! 📚✨💡🔥
+                - Keep each text under 160 chars when possible
+                - Be encouraging and hype them up
+                - Ask questions to keep convo going
 
-                1. **ANALYZE THE FULL CONTEXT**: 
-                - Look at the current message AND recent previous messages (last 2-3 exchanges)
-                - Is this message providing additional info to a previous request? (e.g., "summarize this video" followed by a YouTube link)
-                - Are they asking for help with a specific topic?
-                - Are they sharing new learning goals or providing resources?
-                - Is this completing a multi-part request?
-                - Are they asking about their browsing history, visited URLs, or learning resources? CHECK THE LEARNING CONTEXT SECTION ABOVE - it contains detailed browsing data with URLs, titles, and timestamps.
+                HOW TO RESPOND:
 
-                2. **USE TOOLS STRATEGICALLY, THEN RESPOND**:
-                - **get_youtube_transcript**: If they provide a YouTube URL OR previously asked about a video
-                - **scrape_website_info**: If they provide a website URL OR previously asked about web content
-                - **send_sms**: MANDATORY - Always conclude with SMS responses that:
-                  * Acknowledge their request
-                  * Summarize key findings from any tools used OR reference their browsing history from learning context
-                  * Provide actionable insights or answers
-                  * Ask follow-up questions to continue the conversation
+                1. **Quick Context Check**:
+                - Did they just send a link after asking something?
+                - Are they asking about their browsing history?
+                - What's the vibe - stressed about learning, excited, confused?
 
-                3. **MULTI-MESSAGE CONTEXT HANDLING**:
-                - If recent messages seem related, treat them as one continuous request
-                - Example: "can you summarize this video?" followed by "youtube.com/watch?v=abc" = fetch transcript + provide summary via SMS
-                - Example: "help me understand React" followed by "reactjs.org" = scrape website + explain React concepts via SMS
-                - Always connect the dots between related messages
+                2. **Use Tools + Text Back**:
+                - YouTube link? → get_youtube_transcript → multiple texts with key points
+                - Website? → scrape_website_info → break down into digestible chunks
+                - Browsing history question? → pull from learning context above
 
-                4. **RESPONSE GUIDELINES**:
-                - Be conversational and friendly (this is SMS, keep it personal)
-                - Reference their previous learning if relevant
-                - ALWAYS summarize findings from tools in your SMS responses
-                - When asked about browsing history/URLs: Extract specific URLs, titles, and domains from the learning context data above
-                - Provide actionable insights or next steps
-                - Keep individual SMS messages focused but send multiple if needed
-                - Connect new information to their existing learning patterns
+                3. **Multi-Text Strategy**:
+                Text 1: Quick acknowledgment ("got it! checking that video rn 👀")
+                Text 2-4: Key points (one concept per text)
+                Text 5: Follow-up question or next steps
 
-                5. **BROWSING HISTORY QUERIES**:
-                - When users ask "what URLs did I visit?", "remind me of websites I consulted", or similar questions about their browsing history:
-                  * Look through ALL the learning summaries in the USER'S LEARNING CONTEXT section above
-                  * Extract specific URLs, titles, domains, and timestamps from the learning_graph data
-                  * Organize by topic or chronologically as appropriate
-                  * Include both the URL and the page title when available
-                  * Mention the learning value and relevance if provided
-                - NEVER say "I don't have access to URLs" - you DO have access via the learning context data above
+                EXAMPLES:
 
-                6. **LEARNING FOCUS**:
-                - Help them make connections between concepts
-                - Identify knowledge gaps and suggest resources
-                - Provide practical applications of theoretical concepts
-                - Ask thought-provoking questions about their learning
+                Video request:
+                "yo checking out that vid for you 📹"
+                "ok so main point: React hooks let you use state in functions"
+                "basically useState is like having variables that update the UI"
+                "super useful for dynamic content tbh ✨"
+                "want me to explain any specific hooks?"
 
-                7. **CONVERSATION FLOW**:
-                - Acknowledge their current message AND any related recent messages
-                - Build on previous conversations when relevant
-                - Use their learning history to provide more personalized advice
-                - Maintain continuity in your relationship as their learning assistant
+                Browsing history:
+                "lemme check what you've been studying 📚"
+                "ok you've been deep in JavaScript lately!"
+                "saw you hit up MDN, w3schools, and some React docs"
+                "you're on the right track fr 🔥"
+                "which topic felt most confusing?"
 
-                EXAMPLE WORKFLOWS:
-                - User sends: "can you summarize this video?" then "youtube.com/abc"
-                  → get_youtube_transcript → send_sms with video summary + insights + follow-up questions
-                
-                - User sends: "help me learn about X" then "website.com/about-X"
-                  → scrape_website_info → send_sms with key concepts + learning plan + questions
-                
-                - User sends: just a YouTube/website URL after previously asking about that topic
-                  → use appropriate tool → send_sms with analysis related to their previous question
-
-                - User asks: "Can you remind me of the URLs I visited?" or "what websites did I consult?"
-                  → Look through learning context above → Extract URLs, titles, domains from learning summaries → send_sms with organized list of visited resources + context about what they were learning
-
-                Remember: You must ALWAYS send SMS responses to complete the conversation. Tools are for gathering information, SMS is for communicating with the user. Never use tools without following up with SMS responses that address their original request.
+                Remember: Text like you're actually texting a friend who's learning. Be supportive, break things down, and keep it conversational!
                 """
     
     # Save prompt to txt file
@@ -1069,86 +1044,68 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
         activity_text = '\n'.join(activity_descriptions)
         
         # Create comprehensive learning graph prompt that analyzes all URLs
-        prompt = f"""Analyze this user's browsing activity and create a comprehensive learning graph showing their educational journey:
+        prompt = f"""Analyze browsing activity and create a learning journey map:
 
-                BROWSING ACTIVITY DATA:
+                ACTIVITY DATA:
                 {activity_text}
 
-                INSTRUCTIONS:
-                Create a JSON response that maps the user's learning journey as a hierarchical graph structure. Analyze ALL URLs in the browsing history and categorize them based on their educational relevance.
+                Create JSON mapping their learning path. Include ALL educational URLs.
 
-                REQUIRED JSON STRUCTURE:
+                JSON STRUCTURE:
                 {{
                   "learning_overview": {{
-                    "primary_learning_focus": "Main subject/skill the user is studying",
-                    "secondary_topics": ["related", "topics", "being", "explored"],
-                    "learning_stage": "beginner|intermediate|advanced",
-                    "total_learning_urls": number_of_educational_urls
+                    "primary_focus": "main topic they're learning",
+                    "secondary_topics": ["other", "stuff"],
+                    "level": "beginner|intermediate|advanced",
+                    "total_urls": number
                   }},
                   "learning_graph": {{
-                    "main_topic_1": {{
-                      "topic_name": "Primary Learning Topic",
+                    "topic_name": {{
                       "relevance_score": 0.9,
-                      "sub_topics": {{
-                        "sub_topic_1": {{
-                          "name": "Specific subtopic",
-                          "urls": [
-                            {{
-                              "url": "full_url_here",
-                              "title": "page_title",
-                              "domain": "domain.com",
-                              "timestamp": "visit_time",
-                              "learning_value": "high|medium|low",
-                              "content_type": "tutorial|documentation|video|article|course|tool",
-                              "relevance_explanation": "Why this URL is relevant to learning"
-                            }}
-                          ]
+                      "subtopics": {{
+                        "subtopic": {{
+                          "urls": [{{
+                            "url": "full_url",
+                            "title": "page_title", 
+                            "domain": "site.com",
+                            "timestamp": "time",
+                            "value": "high|medium|low",
+                            "type": "tutorial|docs|video|article|course",
+                            "why": "brief relevance note"
+                          }}]
                         }}
                       }}
                     }}
                   }},
                   "key_resources": {{
-                    "high_value_urls": [
-                      {{
-                        "url": "most_valuable_learning_url",
-                        "title": "page_title",
-                        "learning_value_reason": "Why this is particularly valuable for AI analysis"
-                      }}
-                    ],
-                    "recommended_for_ai_analysis": [
-                      {{
-                        "url": "url_for_deep_analysis", 
-                        "content_type": "youtube_video|documentation|tutorial",
-                        "analysis_priority": "high|medium|low"
-                      }}
-                    ]
+                    "high_value": [{{
+                      "url": "best_url",
+                      "title": "title",
+                      "why": "why valuable"
+                    }}],
+                    "for_ai_analysis": [{{
+                      "url": "url",
+                      "type": "youtube|docs|tutorial", 
+                      "priority": "high|medium|low"
+                    }}]
                   }},
-                  "learning_patterns": {{
-                    "browsing_behavior": "Sequential learning|Random exploration|Deep dive focus|Comparative research",
-                    "knowledge_gaps": ["identified", "gaps", "in", "understanding"],
-                    "progression_indicators": ["signs", "of", "learning", "advancement"]
+                  "patterns": {{
+                    "behavior": "how they browse/learn",
+                    "gaps": ["what", "they", "need"],
+                    "progress": ["signs", "of", "improvement"]
                   }}
                 }}
 
-                ANALYSIS GUIDELINES:
-                1. Include EVERY URL that has ANY educational relevance - don't filter too strictly
-                2. Group URLs by main learning topics, then by subtopics
-                3. Assign learning_value (high/medium/low) based on educational content depth
-                4. Identify content_type accurately (tutorial, documentation, video, etc.)
-                5. Calculate relevance_score for main topics (0.0-1.0) based on frequency and depth
-                6. Prioritize URLs for AI analysis based on content richness (YouTube videos, documentation, tutorials)
-                7. Look for learning patterns across time - are they progressing through topics systematically?
-                8. Identify knowledge gaps where the user might need additional resources
+                RULES:
+                1. Include ALL educational URLs
+                2. Group by topics > subtopics  
+                3. Mark learning value (high/medium/low)
+                4. Identify types (tutorial/docs/video/etc)
+                5. Score topic relevance (0.0-1.0)
+                6. Flag URLs for AI analysis (YouTube, docs, tutorials)
+                7. Spot learning patterns and gaps
 
-                CONTENT TYPE DEFINITIONS:
-                - tutorial: Step-by-step learning content
-                - documentation: Official docs, references, specifications
-                - video: YouTube, educational videos, lectures
-                - article: Blog posts, explanatory articles
-                - course: Structured learning platforms (Coursera, Udemy, etc.)
-                - tool: Development tools, sandboxes, interactive learning
-
-                Return ONLY the JSON object, no additional text."""
+                Return ONLY JSON."""
         
         print(f"🤖 [{thread_name}] Calling Cohere API for {user_label}...")
         
@@ -1468,51 +1425,45 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
                     conversation_context += f"\n{i+1}. [{timestamp}] {direction}: {body}"
             
             # Create enhanced prompt for the agent with conversation context and smart messaging
-            agent_prompt = f"""You are an intelligent learning assistant. You've been analyzing this user's browsing activities and have generated learning summaries. Now you need to decide whether to send helpful SMS messages based on their NEW learning activities.
-
-                IMPORTANT CONTEXT:
-                - You have access to ALL their recent summaries for context
-                - But you should FOCUS PRIMARILY on the NEW (unprocessed) summaries
-                - Only send SMS if the new learning adds meaningful value
-                - Don't repeat topics you've recently discussed with them
+            agent_prompt = f"""You're their learning buddy who texts like Gen Z. Check their NEW learning and decide if it's worth texting about.
 
                 {conversation_context}
 
-                PREVIOUS LEARNING SUMMARIES (Already discussed):
-                {processed_summaries_text if processed_summaries_text else "No previous summaries processed yet."}
+                WHAT THEY'VE ALREADY COVERED:
+                {processed_summaries_text if processed_summaries_text else "Nothing processed yet"}
 
-                NEW LEARNING SUMMARIES (Focus on these):
+                NEW STUFF THEY'VE BEEN LEARNING:
                 {new_summaries_text}
 
-                DECISION CRITERIA - Only send SMS messages if:
-                1. **New learning is substantial**: The new summaries show significant new topics or meaningful progress
-                2. **Not repetitive**: The topics haven't been extensively covered in recent conversations
-                3. **Actionable insights available**: You can provide specific questions, suggestions, or next steps
-                4. **Different from recent messages**: Don't repeat advice or topics from recent SMS exchanges
+                WHEN TO TEXT:
+                ✅ New topic they haven't studied
+                ✅ Cool progress in their learning  
+                ✅ Can offer helpful questions/tips
+                ✅ Haven't talked about this recently
 
-                YOUR TASK:
-                1. **Analyze the NEW summaries** in context of their conversation history
-                2. **Decide if messaging is warranted** based on the criteria above
-                3. **If messaging is warranted**: Send 1-3 focused SMS messages with:
-                   - Specific questions about their NEW learning
-                   - Connections between new and previous topics (if relevant)
-                   - Actionable next steps for their new areas of study
-                   - Insights that build on their learning trajectory
+                ❌ Skip if it's repetitive/casual browsing
 
-                MESSAGING GUIDELINES:
-                - **Quality over quantity**: Better to send nothing than repeat yourself
-                - **Focus on new content**: Reference new summaries primarily
-                - **Be conversational**: This is SMS, keep it personal and friendly
-                - **Add value**: Each message should provide unique insights or questions
-                - **Respect their time**: Don't message if there's nothing meaningful to add
+                IF YOU TEXT:
+                - Send 2-4 short messages max
+                - Each text = one concept/question  
+                - Keep it casual & encouraging
+                - Use emojis & Gen Z language
+                - Ask engaging follow-ups
 
-                DECISION FRAMEWORK:
-                - If new learning is just browsing/casual research: Consider skipping
-                - If new learning shows focused study on new topics: Likely send messages
-                - If new learning builds on previous discussions: Send targeted follow-ups
-                - If new learning is repetitive of recent conversations: Skip messaging
+                EXAMPLES:
 
-                Remember: You have the discretion to NOT send any messages if the new learning doesn't warrant it. It's better to stay silent than be repetitive or unhelpful.
+                Good texting:
+                "yo I saw you diving into React hooks! 🔥"  
+                "useState vs useEffect - which one's clicking for you?"
+                "that tutorial you found looks solid tbh"
+                "want me to explain any specific parts?"
+
+                Skip texting:
+                - Just casual browsing 
+                - Same topics as recent convos
+                - Nothing actionable to add
+
+                Only text if their new learning is actually worth discussing. Quality > quantity fr!
                 """
 
             try:
@@ -1720,13 +1671,13 @@ def execute_cohere_agent(user_prompt: str, to_number: str):
             "type": "function",
             "function": {
                 "name": "send_sms",
-                "description": "Send SMS messages to the user's phone. Use this to deliver summaries, key insights, or important findings directly to the user's mobile device. Perfect for delivering learning summaries or key takeaways.",
+                "description": "Send short, Gen Z-style text messages. Break info into multiple digestible texts like actual texting. Each message should be under 160 chars when possible. Use casual language, emojis, and encouraging tone.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "message_body": {
                             "type": "string",
-                            "description": "The text content of the SMS message to be sent to the user.",
+                            "description": "One short, focused text message. Use casual Gen Z language with emojis. Keep it under 160 chars when possible.",
                         }
                     },
                     "required": ["message_body"],
@@ -2105,21 +2056,21 @@ def api_process_summaries():
 def test_cohere_agent():
     """Test the agent with a sample prompt"""
     test_prompt = """
-    I'm preparing for an important technical interview about web development and React. I need your help to gather comprehensive information and send me key insights via SMS.
+    yo I have a React interview coming up and I'm lowkey stressed 😅 can you help me prep?
 
-    Here's what I need you to do:
+    here's what I need:
 
-    1. First, get the transcript from this React tutorial video: https://www.youtube.com/watch?v=SqcY0GlETPk (React in 100 Seconds by Fireship)
+    1. check out this React video: https://www.youtube.com/watch?v=SqcY0GlETPk (it's like React in 100 seconds)
 
-    2. Then, scrape the official React documentation homepage: https://react.dev
+    2. then hit up the React docs: https://react.dev
 
-    3. After analyzing both sources, please send me multiple SMS messages with:
-       - A summary of the key React concepts from the video (first SMS)
-       - The most important React features mentioned on the React.dev homepage (second SMS)  
-       - 3-5 potential interview questions I should prepare for based on both sources (third SMS)
-       - Any additional tips or insights you think would be valuable for my interview prep (fourth SMS if needed)
+    3. text me back with the key stuff in separate messages:
+       - main React concepts from the vid
+       - important features from the docs  
+       - interview questions I should practice
+       - any other tips that might help
 
-    Feel free to send as many SMS messages as you think would be helpful - I want to be thoroughly prepared! Make each SMS focused and actionable.
+    break it down into multiple texts so it's easier to digest! thanks fr 🙏
     """
     
     return execute_cohere_agent(test_prompt, to_number="+15145850357")

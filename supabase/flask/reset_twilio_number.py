@@ -352,7 +352,7 @@ if __name__ == '__main__':
     # ============================================================================
     
     # SET YOUR TARGET PHONE NUMBER HERE
-    target_phone_number = "+15145850357"  # Replace with the actual phone number
+    target_phone_number = "+16475752697"  # Replace with the actual phone number
     
     # Choose operation mode:
     # - dry_run=True: Shows what would be deleted without actually deleting
