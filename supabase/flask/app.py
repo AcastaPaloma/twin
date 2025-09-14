@@ -440,9 +440,9 @@ def process_user_summaries():
         
         print(f"📅 Looking for summaries created after: {twenty_four_hours_ago}")
         
-        # Fetch all users
+        # Fetch all users with phone numbers
         print("📋 Fetching all users...")
-        users_response = supabase.table('users').select('id, email').execute()
+        users_response = supabase.table('users').select('id, email, phone_number').execute()
         
         if users_response.data is None:
             print('❌ Error fetching users:', users_response)
@@ -460,9 +460,23 @@ def process_user_summaries():
         for user in users:
             user_id = user['id']
             user_email = user.get('email', 'No email')
+            user_phone = user.get('phone_number', None)
             user_label = user_email if user_email != 'No email' else user_id[:8] + "..."
             
             print(f"🔍 Processing summaries for user: {user_label}")
+            
+            # Skip users without phone numbers
+            if not user_phone:
+                print(f"⚠️ Skipping user {user_label} - no phone number available")
+                results.append({
+                    'user_id': user_id,
+                    'user_email': user_email,
+                    'success': False,
+                    'error': 'No phone number available',
+                    'summaries_count': 0,
+                    'agent_execution': None
+                })
+                continue
             
             try:
                 # Fetch summaries for this user from the past 24 hours
@@ -480,7 +494,8 @@ def process_user_summaries():
                         'user_email': user_email,
                         'success': False,
                         'error': 'Error fetching summaries',
-                        'summaries_count': 0
+                        'summaries_count': 0,
+                        'agent_execution': None
                     })
                     continue
                 
@@ -493,10 +508,14 @@ def process_user_summaries():
                 user_result = {
                     'user_id': user_id,
                     'user_email': user_email,
+                    'user_phone': user_phone,
                     'success': True,
                     'summaries_count': summaries_count,
-                    'summaries': []
+                    'summaries': [],
+                    'agent_execution': None
                 }
+                
+                all_summaries_text = ""
                 
                 for summary in summaries:
                     # Extract summary text content
@@ -519,6 +538,51 @@ def process_user_summaries():
                     }
                     
                     user_result['summaries'].append(processed_summary)
+                    all_summaries_text += f"\n\n--- Summary from {summary.get('prompt_generated_at', 'Unknown time')} ---\n{summary_text}"
+                
+                # Execute Cohere agent if we have summaries to analyze
+                if summaries_count > 0:
+                    print(f"🤖 Executing Cohere agent for {user_label} with {summaries_count} summaries")
+                    
+                    # Create prompt for the agent to determine what clarification is needed
+                    agent_prompt = f"""
+I have analyzed this user's recent learning activities and generated the following summaries. Please review them and determine what additional clarification, follow-up questions, or deeper insights would be most helpful for their learning journey.
+
+User's Recent Learning Summaries (Past 24 hours):
+{all_summaries_text}
+
+Your task:
+1. Analyze the learning patterns and topics from these summaries
+2. Identify areas where the user might benefit from clarification, deeper understanding, or follow-up resources
+3. Send targeted SMS messages with:
+   - Specific questions to help them reflect on their learning
+   - Suggestions for related topics they should explore
+   - Resources or next steps that would enhance their understanding
+   - Any gaps in their learning that could be addressed
+
+Be proactive and helpful - send multiple focused SMS messages (2-4 messages) with actionable insights and questions that will advance their learning. Keep each SMS concise but valuable.
+
+Focus on being a learning assistant that helps them:
+- Connect concepts they've been studying
+- Identify knowledge gaps
+- Suggest next steps in their learning journey
+- Ask thought-provoking questions about the material they've encountered
+"""
+
+                    try:
+                        agent_result = execute_cohere_agent(agent_prompt, user_phone)
+                        user_result['agent_execution'] = agent_result
+                        print(f"✅ Agent execution completed for {user_label}")
+                        print(f"📱 SMS messages sent: {agent_result.get('sms_count', 0)}")
+                        
+                    except Exception as agent_error:
+                        print(f"❌ Agent execution failed for {user_label}: {str(agent_error)}")
+                        user_result['agent_execution'] = {
+                            'success': False,
+                            'error': str(agent_error)
+                        }
+                else:
+                    print(f"⏩ No summaries found for {user_label}, skipping agent execution")
                 
                 results.append(user_result)
                 
@@ -527,24 +591,32 @@ def process_user_summaries():
                 results.append({
                     'user_id': user_id,
                     'user_email': user_email,
+                    'user_phone': user_phone,
                     'success': False,
                     'error': str(e),
-                    'summaries_count': 0
+                    'summaries_count': 0,
+                    'agent_execution': None
                 })
         
         # Summary statistics
         total_summaries = sum(r.get('summaries_count', 0) for r in results)
         successful_users = len([r for r in results if r.get('success', False)])
+        successful_agent_executions = len([r for r in results if r.get('agent_execution', {}).get('success', False)])
+        total_sms_sent = sum(r.get('agent_execution', {}).get('sms_count', 0) for r in results)
         
         print(f"🎉 Processing complete!")
         print(f"📈 Total summaries processed: {total_summaries}")
         print(f"✅ Successful users: {successful_users}/{len(users)}")
+        print(f"🤖 Successful agent executions: {successful_agent_executions}")
+        print(f"📱 Total SMS messages sent: {total_sms_sent}")
         
         return {
             'success': True,
             'total_users': len(users),
             'successful_users': successful_users,
             'total_summaries': total_summaries,
+            'successful_agent_executions': successful_agent_executions,
+            'total_sms_sent': total_sms_sent,
             'time_range': f"Past 24 hours (since {twenty_four_hours_ago})",
             'results': results
         }
@@ -796,6 +868,7 @@ def home():
         'status': 'success',
         'endpoints': {
             'cohere_agent': '/api/cohere-agent (POST) - Execute agent with custom prompt',
+            'process_summaries': '/api/process-summaries (POST) - Process user summaries with agent',
             'health': '/health (GET) - Health check'
         },
         'tools_available': ['send_sms', 'get_youtube_transcript', 'scrape_website_info'],
@@ -806,9 +879,25 @@ def home():
                     'prompt': 'Your instruction for the agent...'
                 },
                 'description': 'Send a prompt/instruction and the agent will intelligently use available tools to fulfill your request'
+            },
+            'process_summaries': {
+                'method': 'POST',
+                'description': 'Process all user summaries and send clarification questions via SMS'
             }
         }
     })
+
+@app.route('/api/process-summaries', methods=['POST'])
+def api_process_summaries():
+    """API endpoint to process user summaries with Cohere agent"""
+    try:
+        result = process_user_summaries()
+        return jsonify(result), 200 if result.get('success') else 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # Test function for development
@@ -834,14 +923,27 @@ def test_cohere_agent():
     
     return execute_cohere_agent(test_prompt, to_number="+15145850357")
 
+def test_process_summaries():
+    """Test the new process_user_summaries function with agent integration"""
+    print("🧪 Testing process_user_summaries with agent integration...")
+    result = process_user_summaries()
+    print("🎯 Test result:", result)
+    return result
 
 # if __name__ == '__main__':
-#     # Test the agent when running directly
-#     print("🧪 Testing Cohere agent...")
-#     result = test_cohere_agent()
-#     print("🎯 Test result:", result)
+#     # Choose what to test
+#     test_mode = "summaries"  # Options: "agent", "summaries", "server"
     
-    # Uncomment to run the Flask server
-    # app.run(debug=True, host='0.0.0.0', port=3067)
+#     if test_mode == "agent":
+#         print("🧪 Testing Cohere agent...")
+#         result = test_cohere_agent()
+#         print("🎯 Test result:", result)
+#     elif test_mode == "summaries":
+#         test_process_summaries()
+#     elif test_mode == "server":
+#         app.run(debug=True, host='0.0.0.0', port=3067)
+#     else:
+#         print("Invalid test mode. Choose 'agent', 'summaries', or 'server'")
 
-test_cohere_agent()
+# Run the summaries test by default
+process_user_summaries()
