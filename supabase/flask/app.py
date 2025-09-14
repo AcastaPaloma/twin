@@ -985,14 +985,14 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
 # Cohere Analytics
 # =============================================================== #
 
-def process_user_with_cohere(user_id, user_email=None, check_recent_activity=True):
+def process_user_with_cohere(user_id, user_email=None, check_recent_activity=True, minimum_inactivity=30):
     """
     Process a single user's unprocessed activities with Cohere in a separate thread
     
     Args:
         user_id (str): The user ID to process
         user_email (str): Optional user email for logging
-        check_recent_activity (bool): If True, skip processing if most recent activity was within 60 seconds
+        check_recent_activity (bool): If True, skip processing if most recent activity was within minimum_inactivity seconds
     """
     thread_name = threading.current_thread().name
     user_label = user_email or user_id[:8] + "..."
@@ -1018,7 +1018,7 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
             print(f"⏩ [{thread_name}] No unprocessed activities for {user_label}, skipping")
             return
         
-        # Check if most recent activity is too recent (within 60 seconds)
+        # Check if most recent activity is too recent (within minimum_inactivity seconds)
         if check_recent_activity:
             from datetime import datetime, timezone, timedelta
             now = datetime.now(timezone.utc)
@@ -1046,8 +1046,8 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
             
             if most_recent_timestamp:
                 time_since_recent = now - most_recent_timestamp
-                if time_since_recent.total_seconds() < 60:
-                    print(f"⏰ [{thread_name}] Skipping {user_label} - most recent activity was {time_since_recent.total_seconds():.1f} seconds ago (< 60s)")
+                if time_since_recent.total_seconds() < minimum_inactivity:
+                    print(f"⏰ [{thread_name}] Skipping {user_label} - most recent activity was {time_since_recent.total_seconds():.1f} seconds ago (< {minimum_inactivity})")
                     return
                 else:
                     print(f"✅ [{thread_name}] Most recent activity for {user_label} was {time_since_recent.total_seconds():.1f} seconds ago, proceeding with processing")
