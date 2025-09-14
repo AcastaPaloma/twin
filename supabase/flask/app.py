@@ -49,14 +49,13 @@ task_thread.start()
 # Twilio Sendgrid
 # =============================================================== #
 
-def send_sms(message_body: str): # , to_number: str
+def send_sms(message_body: str, to_number: str): # 
     """
     Send SMS using Twilio and return success status
     
     Returns:
         dict: Contains 'success' (bool), 'message_sid' (str), 'status' (str), and 'error' (str) if failed
     """
-    to_number="+15145850357"
 
     try:
         message = twilio_client.messages.create(
@@ -561,9 +560,15 @@ def process_user_summaries():
 # Cohere Tool Use
 # =============================================================== #
 
-def cohere_action_testing(): 
+def execute_cohere_agent(user_prompt: str, to_number: str):
     """
-    Test function for Cohere actions with real tool use implementation using multi-step tools
+    Execute Cohere agent with multi-tool capabilities based on user instruction
+    
+    Args:
+        user_prompt (str): The instruction/prompt for the agent to execute
+        
+    Returns:
+        dict: Contains execution status, results, and metadata
     """
     
     # Define tools for Cohere
@@ -578,7 +583,7 @@ def cohere_action_testing():
                     "properties": {
                         "message_body": {
                             "type": "string",
-                            "description": "The text content of the SMS message to be sent to the user. ",
+                            "description": "The text content of the SMS message to be sent to the user.",
                         }
                     },
                     "required": ["message_body"],
@@ -621,33 +626,15 @@ def cohere_action_testing():
         }
     ]
     
-    # Test prompt that requires multi-step tool use - inspired by the documentation examples
-    test_prompt = """
-    I'm preparing for an important technical interview about web development and React. I need your help to gather comprehensive information and send me key insights via SMS.
-
-    Here's what I need you to do:
-
-    1. First, get the transcript from this React tutorial video: https://www.youtube.com/watch?v=SqcY0GlETPk (React in 100 Seconds by Fireship)
-
-    2. Then, scrape the official React documentation homepage: https://react.dev
-
-    3. After analyzing both sources, please send me multiple SMS messages with:
-       - A summary of the key React concepts from the video (first SMS)
-       - The most important React features mentioned on the React.dev homepage (second SMS)  
-       - 3-5 potential interview questions I should prepare for based on both sources (third SMS)
-       - Any additional tips or insights you think would be valuable for my interview prep (fourth SMS if needed)
-
-    Feel free to send as many SMS messages as you think would be helpful - I want to be thoroughly prepared! Make each SMS focused and actionable.
-    """
-    
     try:
-        print("🚀 Starting Cohere multi-tool testing...")
+        print(f"🚀 Starting Cohere agent with user prompt...")
+        print(f"📝 User prompt: {user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}")
         
         # Initialize the conversation
         messages = [
             {
                 'role': 'user',
-                'content': test_prompt
+                'content': user_prompt
             }
         ]
         
@@ -656,6 +643,8 @@ def cohere_action_testing():
         iteration = 0
         total_input_tokens = 0
         total_output_tokens = 0
+        tools_used = []
+        sms_messages_sent = []
         
         while iteration < max_iterations:
             iteration += 1
@@ -696,15 +685,12 @@ def cohere_action_testing():
             if response.message.tool_calls:
                 print(f"🛠️  Found {len(response.message.tool_calls)} tool call(s)")
                 
-                tool_results = []
-                
                 for tool_call in response.message.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = tool_call.function.arguments
                     
                     print(f"🔧 Executing tool: {tool_name}")
                     print(f"📋 Arguments: {tool_args}")
-                    print(f"📋 Arguments type: {type(tool_args)}")
                     
                     try:
                         # Parse arguments if they're a string
@@ -714,43 +700,46 @@ def cohere_action_testing():
                         
                         # Execute the appropriate tool function
                         if tool_name == "send_sms":
-                            result = send_sms(tool_args.get("message_body", ""))
+                            result = send_sms(tool_args.get("message_body", ""), to_number=to_number)
+                            if result.get('success'):
+                                sms_messages_sent.append({
+                                    'message_body': tool_args.get("message_body", ""),
+                                    'message_sid': result.get('message_sid'),
+                                    'status': result.get('status')
+                                })
+                            tools_used.append(tool_name)
                             
                         elif tool_name == "get_youtube_transcript":
                             result = get_youtube_transcript(tool_args.get("youtube_url", ""))
+                            tools_used.append(tool_name)
                             
                         elif tool_name == "scrape_website_info":
                             result = scrape_website_info(tool_args.get("url", ""))
+                            tools_used.append(tool_name)
                             
                         else:
                             result = f"Unknown tool: {tool_name}"
                         
                         print(f"✅ Tool result preview: {str(result)[:200]}...")
                         
-                        # Format tool result
-                        tool_results.append({
-                            'call': tool_call,
-                            'outputs': [str(result)]
+                        # Add tool results to conversation
+                        messages.append({
+                            'role': 'tool',
+                            'tool_call_id': tool_call.id,
+                            'content': str(result)
                         })
                         
                     except Exception as e:
                         print(f"❌ Error executing {tool_name}: {str(e)}")
-                        tool_results.append({
-                            'call': tool_call,
-                            'outputs': [f"Error executing {tool_name}: {str(e)}"]
+                        messages.append({
+                            'role': 'tool',
+                            'tool_call_id': tool_call.id,
+                            'content': f"Error executing {tool_name}: {str(e)}"
                         })
-                
-                # Add tool results to conversation - use the correct format for Cohere v2
-                for tool_result in tool_results:
-                    messages.append({
-                        'role': 'tool',
-                        'tool_call_id': tool_result['call'].id,
-                        'content': tool_result['outputs'][0]
-                    })
                 
             else:
                 # No more tool calls, conversation is complete
-                print("🎉 Multi-tool conversation complete!")
+                print("🎉 Agent execution complete!")
                 
                 # Extract final response text
                 final_response = ""
@@ -767,17 +756,14 @@ def cohere_action_testing():
                     'iterations': iteration,
                     'final_response': final_response,
                     'conversation_length': len(messages),
+                    'tools_used': list(set(tools_used)),
+                    'sms_messages_sent': sms_messages_sent,
+                    'sms_count': len(sms_messages_sent),
                     'token_usage': {
                         'input_tokens': total_input_tokens,
                         'output_tokens': total_output_tokens,
                         'total_tokens': total_input_tokens + total_output_tokens
-                    },
-                    'tools_used': [
-                        tool_call.function.name 
-                        for msg in messages 
-                        if msg.get('role') == 'assistant' 
-                        for tool_call in (getattr(getattr(co.chat(model='command-r-plus', messages=[msg]), 'message', None), 'tool_calls', None) or [])
-                    ]
+                    }
                 }
         
         return {
@@ -785,6 +771,9 @@ def cohere_action_testing():
             'error': 'Max iterations reached',
             'iterations': iteration,
             'conversation_length': len(messages),
+            'tools_used': list(set(tools_used)),
+            'sms_messages_sent': sms_messages_sent,
+            'sms_count': len(sms_messages_sent),
             'token_usage': {
                 'input_tokens': total_input_tokens,
                 'output_tokens': total_output_tokens,
@@ -793,7 +782,7 @@ def cohere_action_testing():
         }
         
     except Exception as e:
-        print(f"💥 Error in cohere_action_testing: {str(e)}")
+        print(f"💥 Error in execute_cohere_agent: {str(e)}")
         return {
             'success': False,
             'error': str(e)
@@ -803,36 +792,56 @@ def cohere_action_testing():
 @app.route('/')
 def home():
     return jsonify({
-        'message': 'Flask + Twilio SMS API',
+        'message': 'Flask + Cohere Agent API',
         'status': 'success',
         'endpoints': {
-            'send_sms': '/api/send-sms (POST)',
-            'test_sms': '/api/test-sms (POST)',
-            'health': '/health (GET)'
+            'cohere_agent': '/api/cohere-agent (POST) - Execute agent with custom prompt',
+            'health': '/health (GET) - Health check'
+        },
+        'tools_available': ['send_sms', 'get_youtube_transcript', 'scrape_website_info'],
+        'usage': {
+            'cohere_agent': {
+                'method': 'POST',
+                'payload': {
+                    'prompt': 'Your instruction for the agent...'
+                },
+                'description': 'Send a prompt/instruction and the agent will intelligently use available tools to fulfill your request'
+            }
         }
     })
 
 
-@app.route('/api/test', methods=['GET', 'POST'])
-def test_endpoint():
-    if request.method == 'GET':
-        return jsonify({
-            'method': 'GET',
-            'message': 'Test endpoint working!'
-        })
-    elif request.method == 'POST':
-        data = request.get_json() if request.is_json else {}
-        return jsonify({
-            'method': 'POST',
-            'message': 'Data received successfully',
-            'received_data': data
-        })
+# Test function for development
+def test_cohere_agent():
+    """Test the agent with a sample prompt"""
+    test_prompt = """
+    I'm preparing for an important technical interview about web development and React. I need your help to gather comprehensive information and send me key insights via SMS.
+
+    Here's what I need you to do:
+
+    1. First, get the transcript from this React tutorial video: https://www.youtube.com/watch?v=SqcY0GlETPk (React in 100 Seconds by Fireship)
+
+    2. Then, scrape the official React documentation homepage: https://react.dev
+
+    3. After analyzing both sources, please send me multiple SMS messages with:
+       - A summary of the key React concepts from the video (first SMS)
+       - The most important React features mentioned on the React.dev homepage (second SMS)  
+       - 3-5 potential interview questions I should prepare for based on both sources (third SMS)
+       - Any additional tips or insights you think would be valuable for my interview prep (fourth SMS if needed)
+
+    Feel free to send as many SMS messages as you think would be helpful - I want to be thoroughly prepared! Make each SMS focused and actionable.
+    """
+    
+    return execute_cohere_agent(test_prompt, to_number="+15145850357")
 
 
 # if __name__ == '__main__':
-#     app.run(debug=True, host='0.0.0.0', port=3067)
+#     # Test the agent when running directly
+#     print("🧪 Testing Cohere agent...")
+#     result = test_cohere_agent()
+#     print("🎯 Test result:", result)
+    
+    # Uncomment to run the Flask server
+    # app.run(debug=True, host='0.0.0.0', port=3067)
 
-
-# analyze_all_users()
-# print(scrape_website_info(url="https://example.com"))
-print(cohere_action_testing())
+test_cohere_agent()
