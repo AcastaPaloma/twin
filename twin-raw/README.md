@@ -2,6 +2,17 @@
 
 A Chrome extension that tracks your browsing activity and saves it to a Supabase database for analysis.
 
+## Installation
+
+1. Hop onto chrome://extensions
+2. In the top right turn on Developer Mode
+3. Click Load Unpacked and select the twin-raw folder
+4. Create an account by Texting "Hey Twin" to +1 (587) 870-2558
+5. Click the extension icon to open the popup
+6. Enter your email to sign in
+7. Toggle tracking on/off as needed
+
+
 ## Features
 
 - **User Authentication**: Simple email-based login system
@@ -40,13 +51,6 @@ The extension uses three main tables:
 - `cohere_prompt` (text): AI prompt content
 - `sent_at` (timestamp): When sent
 - `delivery_status` (text): Status of delivery
-
-## Installation
-
-1. Load the extension in Chrome developer mode
-2. Click the extension icon to open the popup
-3. Enter your email to sign in (creates account automatically)
-4. Toggle tracking on/off as needed
 
 ## Privacy
 
