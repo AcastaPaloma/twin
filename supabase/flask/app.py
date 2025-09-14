@@ -49,13 +49,15 @@ task_thread.start()
 # Twilio Sendgrid
 # =============================================================== #
 
-def send_sms(message_body: str, to_number: str):
+def send_sms(message_body: str): # , to_number: str
     """
     Send SMS using Twilio and return success status
     
     Returns:
         dict: Contains 'success' (bool), 'message_sid' (str), 'status' (str), and 'error' (str) if failed
     """
+    to_number="+15145850357"
+
     try:
         message = twilio_client.messages.create(
             body=message_body,
@@ -555,11 +557,247 @@ def process_user_summaries():
             'error': f"Fatal error: {error}"
         }
 
+# =============================================================== #
+# Cohere Tool Use
+# =============================================================== #
+
 def cohere_action_testing(): 
     """
-    Test function for Cohere actions
+    Test function for Cohere actions with real tool use implementation using multi-step tools
     """
-    return "Cohere action testing placeholder"
+    
+    # Define tools for Cohere
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "send_sms",
+                "description": "Send SMS messages to the user's phone. Use this to deliver summaries, key insights, or important findings directly to the user's mobile device. Perfect for delivering learning summaries or key takeaways.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message_body": {
+                            "type": "string",
+                            "description": "The text content of the SMS message to be sent to the user. ",
+                        }
+                    },
+                    "required": ["message_body"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_youtube_transcript",
+                "description": "Extract transcript text from a YouTube video URL. Returns the full transcript as text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "youtube_url": {
+                            "type": "string",
+                            "description": "The YouTube video URL to extract transcript from",
+                        }
+                    },
+                    "required": ["youtube_url"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "scrape_website_info",
+                "description": "Scrape website content and return the body text. Returns the website content as clean text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The website URL to scrape content from",
+                        }
+                    },
+                    "required": ["url"],
+                },
+            },
+        }
+    ]
+    
+    # Test prompt that requires multi-step tool use - inspired by the documentation examples
+    test_prompt = """
+    I'm preparing for an important technical interview about web development and React. I need your help to gather comprehensive information and send me key insights via SMS.
+
+    Here's what I need you to do:
+
+    1. First, get the transcript from this React tutorial video: https://www.youtube.com/watch?v=SqcY0GlETPk (React in 100 Seconds by Fireship)
+
+    2. Then, scrape the official React documentation homepage: https://react.dev
+
+    3. After analyzing both sources, please send me multiple SMS messages with:
+       - A summary of the key React concepts from the video (first SMS)
+       - The most important React features mentioned on the React.dev homepage (second SMS)  
+       - 3-5 potential interview questions I should prepare for based on both sources (third SMS)
+       - Any additional tips or insights you think would be valuable for my interview prep (fourth SMS if needed)
+
+    Feel free to send as many SMS messages as you think would be helpful - I want to be thoroughly prepared! Make each SMS focused and actionable.
+    """
+    
+    try:
+        print("🚀 Starting Cohere multi-tool testing...")
+        
+        # Initialize the conversation
+        messages = [
+            {
+                'role': 'user',
+                'content': test_prompt
+            }
+        ]
+        
+        # Track conversation state and token usage
+        max_iterations = 5  # Allow multiple iterations for multi-step tool use
+        iteration = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        
+        while iteration < max_iterations:
+            iteration += 1
+            print(f"🔄 Iteration {iteration}...")
+            
+            # Call Cohere with tools
+            response = co.chat(
+                model='command-a-03-2025',
+                messages=messages,
+                tools=tools,
+                temperature=0.3
+            )
+            
+            print(f"📝 Response finish reason: {response.finish_reason}")
+            
+            # Track token usage
+            if hasattr(response, 'usage') and response.usage:
+                input_tokens = getattr(response.usage, 'input_tokens', 0)
+                output_tokens = getattr(response.usage, 'output_tokens', 0)
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+                print(f"🪙 Token usage this call - Input: {input_tokens}, Output: {output_tokens}")
+                print(f"🪙 Total token usage so far - Input: {total_input_tokens}, Output: {total_output_tokens}")
+            
+            # Add assistant's response to messages
+            assistant_message = {
+                'role': 'assistant',
+                'content': response.message.content
+            }
+            
+            # Include tool calls in the assistant message if they exist
+            if response.message.tool_calls:
+                assistant_message['tool_calls'] = response.message.tool_calls
+                
+            messages.append(assistant_message)
+            
+            # Handle tool calls
+            if response.message.tool_calls:
+                print(f"🛠️  Found {len(response.message.tool_calls)} tool call(s)")
+                
+                tool_results = []
+                
+                for tool_call in response.message.tool_calls:
+                    tool_name = tool_call.function.name
+                    tool_args = tool_call.function.arguments
+                    
+                    print(f"🔧 Executing tool: {tool_name}")
+                    print(f"📋 Arguments: {tool_args}")
+                    print(f"📋 Arguments type: {type(tool_args)}")
+                    
+                    try:
+                        # Parse arguments if they're a string
+                        if isinstance(tool_args, str):
+                            import json
+                            tool_args = json.loads(tool_args)
+                        
+                        # Execute the appropriate tool function
+                        if tool_name == "send_sms":
+                            result = send_sms(tool_args.get("message_body", ""))
+                            
+                        elif tool_name == "get_youtube_transcript":
+                            result = get_youtube_transcript(tool_args.get("youtube_url", ""))
+                            
+                        elif tool_name == "scrape_website_info":
+                            result = scrape_website_info(tool_args.get("url", ""))
+                            
+                        else:
+                            result = f"Unknown tool: {tool_name}"
+                        
+                        print(f"✅ Tool result preview: {str(result)[:200]}...")
+                        
+                        # Format tool result
+                        tool_results.append({
+                            'call': tool_call,
+                            'outputs': [str(result)]
+                        })
+                        
+                    except Exception as e:
+                        print(f"❌ Error executing {tool_name}: {str(e)}")
+                        tool_results.append({
+                            'call': tool_call,
+                            'outputs': [f"Error executing {tool_name}: {str(e)}"]
+                        })
+                
+                # Add tool results to conversation - use the correct format for Cohere v2
+                for tool_result in tool_results:
+                    messages.append({
+                        'role': 'tool',
+                        'tool_call_id': tool_result['call'].id,
+                        'content': tool_result['outputs'][0]
+                    })
+                
+            else:
+                # No more tool calls, conversation is complete
+                print("🎉 Multi-tool conversation complete!")
+                
+                # Extract final response text
+                final_response = ""
+                if hasattr(response.message, 'content') and response.message.content:
+                    if isinstance(response.message.content, list):
+                        for item in response.message.content:
+                            if hasattr(item, 'text'):
+                                final_response += item.text
+                    else:
+                        final_response = str(response.message.content)
+                
+                return {
+                    'success': True,
+                    'iterations': iteration,
+                    'final_response': final_response,
+                    'conversation_length': len(messages),
+                    'token_usage': {
+                        'input_tokens': total_input_tokens,
+                        'output_tokens': total_output_tokens,
+                        'total_tokens': total_input_tokens + total_output_tokens
+                    },
+                    'tools_used': [
+                        tool_call.function.name 
+                        for msg in messages 
+                        if msg.get('role') == 'assistant' 
+                        for tool_call in (getattr(getattr(co.chat(model='command-r-plus', messages=[msg]), 'message', None), 'tool_calls', None) or [])
+                    ]
+                }
+        
+        return {
+            'success': False,
+            'error': 'Max iterations reached',
+            'iterations': iteration,
+            'conversation_length': len(messages),
+            'token_usage': {
+                'input_tokens': total_input_tokens,
+                'output_tokens': total_output_tokens,
+                'total_tokens': total_input_tokens + total_output_tokens
+            }
+        }
+        
+    except Exception as e:
+        print(f"💥 Error in cohere_action_testing: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 
 @app.route('/')
@@ -590,9 +828,11 @@ def test_endpoint():
             'received_data': data
         })
 
+
 # if __name__ == '__main__':
 #     app.run(debug=True, host='0.0.0.0', port=3067)
 
 
 # analyze_all_users()
 # print(scrape_website_info(url="https://example.com"))
+print(cohere_action_testing())
