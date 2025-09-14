@@ -92,7 +92,7 @@ def delete_message_history_with_number(phone_number: str, dry_run: bool = True):
         print("📋 Message Details:")
         for i, msg in enumerate(messages_to_delete[:10]):  # Show first 10 for preview
             direction = "📥 IN " if msg.from_ == phone_number else "📤 OUT"
-            body_preview = (msg.body[:50] + "...") if len(msg.body) > 50 else msg.body
+            body_preview = (msg.body[:100] + "...") if len(msg.body) > 100 else msg.body
             print(f"   {i+1}. {direction} | {msg.date_created} | SID: {msg.sid[:10]}... | '{body_preview}'")
         
         if len(messages_to_delete) > 10:
@@ -129,7 +129,7 @@ def delete_message_history_with_number(phone_number: str, dry_run: bool = True):
                 failed_deletions.append({
                     'sid': msg.sid,
                     'error': str(delete_error),
-                    'body_preview': (msg.body[:50] + "...") if len(msg.body) > 50 else msg.body
+                    'body_preview': (msg.body[:100] + "...") if len(msg.body) > 100 else msg.body
                 })
         
         print("-" * 80)

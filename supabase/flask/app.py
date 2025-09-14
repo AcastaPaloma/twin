@@ -366,7 +366,7 @@ def create_new_user(phone_number: str) -> dict:
         # Create new user with minimal info
         new_user_data = {
             'phone_number': phone_number,
-            'email': '',  # Empty email, will be filled during onboarding
+            'email': None,  # NULL email, will be filled during onboarding
             'onboarding_state': 'awaiting_email',
             'is_active': True
         }
@@ -390,11 +390,25 @@ def create_new_user(phone_number: str) -> dict:
             }
             
     except Exception as e:
-        print(f"💥 Error creating user for {phone_number}: {e}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        error_message = str(e)
+        print(f"💥 Error creating user for {phone_number}: {error_message}")
+        
+        # Provide more specific error messages for common constraint violations
+        if "users_email_key" in error_message:
+            return {
+                'success': False,
+                'error': f'Email constraint violation: {error_message}'
+            }
+        elif "users_phone_number_key" in error_message:
+            return {
+                'success': False,
+                'error': f'Phone number already exists: {phone_number}'
+            }
+        else:
+            return {
+                'success': False,
+                'error': error_message
+            }
 
 def update_user_email(user_id: str, email: str) -> dict:
     """
@@ -848,7 +862,7 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
 
             Recent conversation (most recent first):"""
         
-        for i, msg in enumerate(recent_messages[:5]):  # Last 5 messages for context
+        for i, msg in enumerate(recent_messages[:10]):  # Last 10 messages for better context
             direction = "📤 User" if msg['direction'] == 'inbound' else "📥 Assistant"
             timestamp = msg.get('date_created', 'Unknown time')[:16]  # Just date and time
             conversation_context += f"\n{i+1}. [{timestamp}] {direction}: {msg['body']}"
@@ -864,11 +878,12 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
 
         Recent Learning Topics and Activities:"""
         
-        for i, summary in enumerate(summaries[:3]):  # Show last 3 summaries
+        for i, summary in enumerate(summaries[:5]):  # Show last 5 summaries for better context
             timestamp = summary.get('prompt_generated_at', 'Unknown time')[:16]
             summary_text = summary.get('summary_text', 'No summary available')
-            # Limit summary length for prompt
-            summary_preview = summary_text[:200] + '...' if len(summary_text) > 200 else summary_text
+            # Include full summary to preserve URLs and detailed context
+            # This is critical for answering questions about specific websites/resources consulted
+            summary_preview = summary_text[:2000] + '...' if len(summary_text) > 2000 else summary_text
             learning_context += f"\n{i+1}. [{timestamp}]: {summary_preview}"
     
     # Create the comprehensive prompt
@@ -886,6 +901,7 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
                 1. **ALWAYS END WITH SMS**: Every interaction MUST conclude with at least one send_sms call to respond to the user
                 2. **CONNECT RECENT MESSAGES**: Look at the most recent 2-3 messages to understand context. If the user previously asked a question and now provides a URL/resource, treat them as connected
                 3. **COMPLETE THE REQUEST**: If you use tools like get_youtube_transcript or scrape_website_info, you MUST then send SMS messages that address the original request with the gathered information
+                4. **USE LEARNING CONTEXT**: You HAVE ACCESS to the user's detailed browsing history with URLs, titles, and timestamps in the learning context above. When users ask about their browsing history, visited websites, or learning resources, reference this data directly.
 
                 YOUR RESPONSE STRATEGY:
                 Based on the user's message, conversation history, and learning context, you should:
@@ -896,13 +912,14 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
                 - Are they asking for help with a specific topic?
                 - Are they sharing new learning goals or providing resources?
                 - Is this completing a multi-part request?
+                - Are they asking about their browsing history, visited URLs, or learning resources? CHECK THE LEARNING CONTEXT SECTION ABOVE - it contains detailed browsing data with URLs, titles, and timestamps.
 
                 2. **USE TOOLS STRATEGICALLY, THEN RESPOND**:
                 - **get_youtube_transcript**: If they provide a YouTube URL OR previously asked about a video
                 - **scrape_website_info**: If they provide a website URL OR previously asked about web content
                 - **send_sms**: MANDATORY - Always conclude with SMS responses that:
                   * Acknowledge their request
-                  * Summarize key findings from any tools used
+                  * Summarize key findings from any tools used OR reference their browsing history from learning context
                   * Provide actionable insights or answers
                   * Ask follow-up questions to continue the conversation
 
@@ -916,17 +933,27 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
                 - Be conversational and friendly (this is SMS, keep it personal)
                 - Reference their previous learning if relevant
                 - ALWAYS summarize findings from tools in your SMS responses
+                - When asked about browsing history/URLs: Extract specific URLs, titles, and domains from the learning context data above
                 - Provide actionable insights or next steps
                 - Keep individual SMS messages focused but send multiple if needed
                 - Connect new information to their existing learning patterns
 
-                5. **LEARNING FOCUS**:
+                5. **BROWSING HISTORY QUERIES**:
+                - When users ask "what URLs did I visit?", "remind me of websites I consulted", or similar questions about their browsing history:
+                  * Look through ALL the learning summaries in the USER'S LEARNING CONTEXT section above
+                  * Extract specific URLs, titles, domains, and timestamps from the learning_graph data
+                  * Organize by topic or chronologically as appropriate
+                  * Include both the URL and the page title when available
+                  * Mention the learning value and relevance if provided
+                - NEVER say "I don't have access to URLs" - you DO have access via the learning context data above
+
+                6. **LEARNING FOCUS**:
                 - Help them make connections between concepts
                 - Identify knowledge gaps and suggest resources
                 - Provide practical applications of theoretical concepts
                 - Ask thought-provoking questions about their learning
 
-                6. **CONVERSATION FLOW**:
+                7. **CONVERSATION FLOW**:
                 - Acknowledge their current message AND any related recent messages
                 - Build on previous conversations when relevant
                 - Use their learning history to provide more personalized advice
@@ -942,9 +969,16 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
                 - User sends: just a YouTube/website URL after previously asking about that topic
                   → use appropriate tool → send_sms with analysis related to their previous question
 
+                - User asks: "Can you remind me of the URLs I visited?" or "what websites did I consult?"
+                  → Look through learning context above → Extract URLs, titles, domains from learning summaries → send_sms with organized list of visited resources + context about what they were learning
+
                 Remember: You must ALWAYS send SMS responses to complete the conversation. Tools are for gathering information, SMS is for communicating with the user. Never use tools without following up with SMS responses that address their original request.
                 """
-
+    
+    # Save prompt to txt file
+    with open('system_prompt.txt', 'w', encoding='utf-8') as f:
+        f.write(prompt)
+    
     return prompt
 
 # =============================================================== #
@@ -1034,21 +1068,87 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
         
         activity_text = '\n'.join(activity_descriptions)
         
-        # Optimized prompt for learning focus and key resource identification
-        prompt = f"""Analyze this browsing activity to identify what the user is trying to learn and key resources for future AI analysis:
+        # Create comprehensive learning graph prompt that analyzes all URLs
+        prompt = f"""Analyze this user's browsing activity and create a comprehensive learning graph showing their educational journey:
 
+                BROWSING ACTIVITY DATA:
                 {activity_text}
 
-                Focus on:
-                1. MAIN LEARNING TOPICS: What specific subjects/skills is the user studying?
-                2. KEY URLs: List the most valuable URLs for future AI summarization:
-                - YouTube videos (educational/tutorial content)
-                - Documentation sites
-                - Course platforms  
-                - Technical articles/blogs
-                - Learning tools/software
+                INSTRUCTIONS:
+                Create a JSON response that maps the user's learning journey as a hierarchical graph structure. Analyze ALL URLs in the browsing history and categorize them based on their educational relevance.
 
-                Prioritize URLs that contain rich educational content that would benefit from AI summarization."""
+                REQUIRED JSON STRUCTURE:
+                {{
+                  "learning_overview": {{
+                    "primary_learning_focus": "Main subject/skill the user is studying",
+                    "secondary_topics": ["related", "topics", "being", "explored"],
+                    "learning_stage": "beginner|intermediate|advanced",
+                    "total_learning_urls": number_of_educational_urls
+                  }},
+                  "learning_graph": {{
+                    "main_topic_1": {{
+                      "topic_name": "Primary Learning Topic",
+                      "relevance_score": 0.9,
+                      "sub_topics": {{
+                        "sub_topic_1": {{
+                          "name": "Specific subtopic",
+                          "urls": [
+                            {{
+                              "url": "full_url_here",
+                              "title": "page_title",
+                              "domain": "domain.com",
+                              "timestamp": "visit_time",
+                              "learning_value": "high|medium|low",
+                              "content_type": "tutorial|documentation|video|article|course|tool",
+                              "relevance_explanation": "Why this URL is relevant to learning"
+                            }}
+                          ]
+                        }}
+                      }}
+                    }}
+                  }},
+                  "key_resources": {{
+                    "high_value_urls": [
+                      {{
+                        "url": "most_valuable_learning_url",
+                        "title": "page_title",
+                        "learning_value_reason": "Why this is particularly valuable for AI analysis"
+                      }}
+                    ],
+                    "recommended_for_ai_analysis": [
+                      {{
+                        "url": "url_for_deep_analysis", 
+                        "content_type": "youtube_video|documentation|tutorial",
+                        "analysis_priority": "high|medium|low"
+                      }}
+                    ]
+                  }},
+                  "learning_patterns": {{
+                    "browsing_behavior": "Sequential learning|Random exploration|Deep dive focus|Comparative research",
+                    "knowledge_gaps": ["identified", "gaps", "in", "understanding"],
+                    "progression_indicators": ["signs", "of", "learning", "advancement"]
+                  }}
+                }}
+
+                ANALYSIS GUIDELINES:
+                1. Include EVERY URL that has ANY educational relevance - don't filter too strictly
+                2. Group URLs by main learning topics, then by subtopics
+                3. Assign learning_value (high/medium/low) based on educational content depth
+                4. Identify content_type accurately (tutorial, documentation, video, etc.)
+                5. Calculate relevance_score for main topics (0.0-1.0) based on frequency and depth
+                6. Prioritize URLs for AI analysis based on content richness (YouTube videos, documentation, tutorials)
+                7. Look for learning patterns across time - are they progressing through topics systematically?
+                8. Identify knowledge gaps where the user might need additional resources
+
+                CONTENT TYPE DEFINITIONS:
+                - tutorial: Step-by-step learning content
+                - documentation: Official docs, references, specifications
+                - video: YouTube, educational videos, lectures
+                - article: Blog posts, explanatory articles
+                - course: Structured learning platforms (Coursera, Udemy, etc.)
+                - tool: Development tools, sandboxes, interactive learning
+
+                Return ONLY the JSON object, no additional text."""
         
         print(f"🤖 [{thread_name}] Calling Cohere API for {user_label}...")
         
@@ -1061,6 +1161,7 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
                     'content': prompt,
                 },
             ],
+            response_format={"type": "json_object"},
         )
         
         print(f"✅ [{thread_name}] Received Cohere response for {user_label}")
@@ -1317,6 +1418,10 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
         
         print(f"📊 [{thread_name}] Found {summaries_count} total summaries ({unprocessed_count} unprocessed) for {user_label} in the past 24 hours")
         
+        # Fetch recent message history for context
+        print(f"📞 [{thread_name}] Fetching message history for {user_label} to provide conversation context")
+        message_history = get_message_history(user_phone, limit=20)  # Get last 20 messages for context
+        
         # Process each summary for this user
         user_result = {
             'user_id': user_id,
@@ -1325,6 +1430,7 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
             'success': True,
             'summaries_count': summaries_count,
             'unprocessed_count': unprocessed_count,
+            'message_history_count': message_history.get('total_messages', 0) if message_history and message_history.get('success') else 0,
             'summaries': summaries,  # Already formatted by the new function
             'agent_execution': None
         }
@@ -1333,36 +1439,92 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
         if unprocessed_count > 0:
             print(f"🤖 [{thread_name}] Executing Cohere agent for {user_label} with {unprocessed_count} unprocessed summaries")
             
-            # Create prompt for the agent to determine what clarification is needed
-            agent_prompt = f"""
-                I have analyzed this user's recent learning activities and generated the following summaries. Please review them and determine what additional clarification, follow-up questions, or deeper insights would be most helpful for their learning journey.
+            # Separate new (unprocessed) summaries from old (processed) ones for better context
+            new_summaries_text = ""
+            processed_summaries_text = ""
+            
+            for summary in summaries:
+                summary_text = summary.get('summary_text', '')
+                timestamp = summary.get('prompt_generated_at', 'Unknown time')
+                
+                if summary.get('processed', False):
+                    processed_summaries_text += f"\n\n--- PROCESSED Summary from {timestamp} ---\n{summary_text}"
+                else:
+                    new_summaries_text += f"\n\n--- NEW Summary from {timestamp} ---\n{summary_text}"
+            
+            # Build conversation context from message history
+            conversation_context = ""
+            if message_history and message_history.get('success') and message_history.get('total_messages', 0) > 0:
+                recent_messages = message_history.get('messages', [])[:10]  # Last 10 messages
+                conversation_context = f"""
+                RECENT CONVERSATION HISTORY ({message_history.get('total_messages', 0)} total messages):
+                """
+                
+                for i, msg in enumerate(recent_messages):
+                    direction = "📤 User" if msg['direction'] == 'inbound' else "📥 Assistant"
+                    timestamp = msg.get('date_created', 'Unknown time')[:16] if msg.get('date_created') else 'Unknown time'
+                    # Preserve full message context for better AI understanding
+                    body = msg.get('body', '')[:500] + '...' if len(msg.get('body', '')) > 500 else msg.get('body', '')
+                    conversation_context += f"\n{i+1}. [{timestamp}] {direction}: {body}"
+            
+            # Create enhanced prompt for the agent with conversation context and smart messaging
+            agent_prompt = f"""You are an intelligent learning assistant. You've been analyzing this user's browsing activities and have generated learning summaries. Now you need to decide whether to send helpful SMS messages based on their NEW learning activities.
 
-                User's Recent Learning Summaries (Past 24 hours):
-                {all_summaries_text}
+                IMPORTANT CONTEXT:
+                - You have access to ALL their recent summaries for context
+                - But you should FOCUS PRIMARILY on the NEW (unprocessed) summaries
+                - Only send SMS if the new learning adds meaningful value
+                - Don't repeat topics you've recently discussed with them
 
-                Your task:
-                1. Analyze the learning patterns and topics from these summaries
-                2. Identify areas where the user might benefit from clarification, deeper understanding, or follow-up resources
-                3. Send targeted SMS messages with:
-                - Specific questions to help them reflect on their learning
-                - Suggestions for related topics they should explore
-                - Resources or next steps that would enhance their understanding
-                - Any gaps in their learning that could be addressed
+                {conversation_context}
 
-                Be proactive and helpful - send multiple focused SMS messages (2-4 messages) with actionable insights and questions that will advance their learning. Keep each SMS concise but valuable.
+                PREVIOUS LEARNING SUMMARIES (Already discussed):
+                {processed_summaries_text if processed_summaries_text else "No previous summaries processed yet."}
 
-                Focus on being a learning assistant that helps them:
-                - Connect concepts they've been studying
-                - Identify knowledge gaps
-                - Suggest next steps in their learning journey
-                - Ask thought-provoking questions about the material they've encountered
+                NEW LEARNING SUMMARIES (Focus on these):
+                {new_summaries_text}
+
+                DECISION CRITERIA - Only send SMS messages if:
+                1. **New learning is substantial**: The new summaries show significant new topics or meaningful progress
+                2. **Not repetitive**: The topics haven't been extensively covered in recent conversations
+                3. **Actionable insights available**: You can provide specific questions, suggestions, or next steps
+                4. **Different from recent messages**: Don't repeat advice or topics from recent SMS exchanges
+
+                YOUR TASK:
+                1. **Analyze the NEW summaries** in context of their conversation history
+                2. **Decide if messaging is warranted** based on the criteria above
+                3. **If messaging is warranted**: Send 1-3 focused SMS messages with:
+                   - Specific questions about their NEW learning
+                   - Connections between new and previous topics (if relevant)
+                   - Actionable next steps for their new areas of study
+                   - Insights that build on their learning trajectory
+
+                MESSAGING GUIDELINES:
+                - **Quality over quantity**: Better to send nothing than repeat yourself
+                - **Focus on new content**: Reference new summaries primarily
+                - **Be conversational**: This is SMS, keep it personal and friendly
+                - **Add value**: Each message should provide unique insights or questions
+                - **Respect their time**: Don't message if there's nothing meaningful to add
+
+                DECISION FRAMEWORK:
+                - If new learning is just browsing/casual research: Consider skipping
+                - If new learning shows focused study on new topics: Likely send messages
+                - If new learning builds on previous discussions: Send targeted follow-ups
+                - If new learning is repetitive of recent conversations: Skip messaging
+
+                Remember: You have the discretion to NOT send any messages if the new learning doesn't warrant it. It's better to stay silent than be repetitive or unhelpful.
                 """
 
             try:
                 agent_result = execute_cohere_agent(agent_prompt, user_phone)
                 user_result['agent_execution'] = agent_result
                 print(f"✅ [{thread_name}] Agent execution completed for {user_label}")
-                print(f"📱 [{thread_name}] SMS messages sent: {agent_result.get('sms_count', 0)}")
+                
+                sms_count = agent_result.get('sms_count', 0)
+                if sms_count > 0:
+                    print(f"📱 [{thread_name}] SMS messages sent: {sms_count}")
+                else:
+                    print(f"🤐 [{thread_name}] Agent decided not to send SMS (content may be repetitive or not substantial enough)")
                 
                 # Mark unprocessed summaries as processed after successful agent execution
                 if agent_result.get('success', False):
@@ -1483,12 +1645,21 @@ def process_user_summaries():
         total_sms_sent = sum(r.get('agent_execution', {}).get('sms_count', 0) for r in results)
         total_summaries_marked_processed = sum(r.get('summaries_marked_processed', 0) for r in results)
         
+        # Track smart messaging decisions
+        users_with_unprocessed = len([r for r in results if r.get('unprocessed_count', 0) > 0])
+        agent_decided_to_message = len([r for r in results if r.get('agent_execution', {}).get('sms_count', 0) > 0])
+        agent_decided_to_skip = successful_agent_executions - agent_decided_to_message
+        total_message_history_entries = sum(r.get('message_history_count', 0) for r in results)
+        
         print(f"🎉 Multi-threaded processing complete!")
         print(f"📈 Total summaries found: {total_summaries}")
         print(f"🔄 Total unprocessed summaries: {total_unprocessed}")
         print(f"✅ Successful users: {successful_users}/{len(users)}")
         print(f"🤖 Successful agent executions: {successful_agent_executions}")
+        print(f"📱 Agent decided to send messages: {agent_decided_to_message}/{users_with_unprocessed} users with new content")
+        print(f"🤐 Agent decided to skip messaging: {agent_decided_to_skip} (smart filtering)")
         print(f"📱 Total SMS messages sent: {total_sms_sent}")
+        print(f"💬 Total conversation history entries: {total_message_history_entries}")
         print(f"✅ Summaries marked as processed: {total_summaries_marked_processed}")
         
         return {
@@ -1497,8 +1668,12 @@ def process_user_summaries():
             'successful_users': successful_users,
             'total_summaries': total_summaries,
             'total_unprocessed': total_unprocessed,
+            'users_with_unprocessed': users_with_unprocessed,
             'successful_agent_executions': successful_agent_executions,
+            'agent_decided_to_message': agent_decided_to_message,
+            'agent_decided_to_skip': agent_decided_to_skip,
             'total_sms_sent': total_sms_sent,
+            'total_message_history_entries': total_message_history_entries,
             'summaries_marked_processed': total_summaries_marked_processed,
             'time_range': f"Past 24 hours (since {twenty_four_hours_ago})",
             'results': results
