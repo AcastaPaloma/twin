@@ -204,7 +204,7 @@ def get_user_by_phone_number(phone_number: str):
         print(f"🔍 Looking up user by phone number: {phone_number}")
         
         user_response = supabase.table('users') \
-            .select('id, email, phone_number') \
+            .select('id, email, phone_number, name, onboarding_state') \
             .eq('phone_number', phone_number) \
             .execute()
         
@@ -239,6 +239,370 @@ def get_user_by_phone_number(phone_number: str):
             'user_found': False,
             'user_info': None
         }
+
+# =============================================================== #
+# Onboarding System
+# =============================================================== #
+
+def validate_email_format(email: str) -> bool:
+    """
+    Simple email validation using regex
+    
+    Args:
+        email (str): Email address to validate
+        
+    Returns:
+        bool: True if email format is valid, False otherwise
+    """
+    import re
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def check_onboarding_gates(phone_number: str) -> dict:
+    """
+    Check user's onboarding status and determine next gate
+    
+    Args:
+        phone_number (str): The phone number to check
+        
+    Returns:
+        dict: {
+            'user_exists': bool,
+            'user_info': dict or None,
+            'onboarding_complete': bool,
+            'next_gate': 'registration' | 'email' | 'name' | 'complete',
+            'current_state': str or None
+        }
+    """
+    try:
+        print(f"🚪 Checking onboarding gates for {phone_number}")
+        
+        user_lookup = get_user_by_phone_number(phone_number)
+        
+        if not user_lookup['success'] or not user_lookup['user_found']:
+            print(f"🆕 New user - needs registration")
+            return {
+                'user_exists': False,
+                'user_info': None,
+                'onboarding_complete': False,
+                'next_gate': 'registration',
+                'current_state': None
+            }
+        
+        user_info = user_lookup['user_info']
+        onboarding_state = user_info.get('onboarding_state')
+        email = user_info.get('email')
+        name = user_info.get('name')
+        
+        print(f"📊 User state: onboarding_state='{onboarding_state}', email='{email}', name='{name}'")
+        
+        # Determine next gate based on current state
+        if onboarding_state is None:
+            # User exists but no onboarding state set - check email
+            if not email or email.strip() == '':
+                next_gate = 'email'
+                complete = False
+            elif not name or name.strip() == '':
+                next_gate = 'name'
+                complete = False
+            else:
+                next_gate = 'complete'
+                complete = True
+        elif onboarding_state == 'awaiting_email':
+            next_gate = 'email'
+            complete = False
+        elif onboarding_state == 'awaiting_name':
+            next_gate = 'name'
+            complete = False
+        elif onboarding_state == 'complete':
+            next_gate = 'complete'
+            complete = True
+        else:
+            # Unknown state - default to checking fields
+            if not email or email.strip() == '':
+                next_gate = 'email'
+                complete = False
+            elif not name or name.strip() == '':
+                next_gate = 'name'
+                complete = False
+            else:
+                next_gate = 'complete'
+                complete = True
+        
+        print(f"🎯 Next gate: {next_gate}, Complete: {complete}")
+        
+        return {
+            'user_exists': True,
+            'user_info': user_info,
+            'onboarding_complete': complete,
+            'next_gate': next_gate,
+            'current_state': onboarding_state
+        }
+        
+    except Exception as e:
+        print(f"💥 Error checking onboarding gates: {e}")
+        return {
+            'user_exists': False,
+            'user_info': None,
+            'onboarding_complete': False,
+            'next_gate': 'registration',
+            'current_state': None,
+            'error': str(e)
+        }
+
+def create_new_user(phone_number: str) -> dict:
+    """
+    Create new user with phone number, set state to 'awaiting_email'
+    
+    Args:
+        phone_number (str): The phone number for the new user
+        
+    Returns:
+        dict: Contains success status and user info
+    """
+    try:
+        print(f"👤 Creating new user for {phone_number}")
+        
+        # Create new user with minimal info
+        new_user_data = {
+            'phone_number': phone_number,
+            'email': '',  # Empty email, will be filled during onboarding
+            'onboarding_state': 'awaiting_email',
+            'is_active': True
+        }
+        
+        response = supabase.table('users').insert([new_user_data]).execute()
+        
+        if response.data:
+            user = response.data[0]
+            print(f"✅ Created new user: {user['id'][:8]}... for {phone_number}")
+            
+            return {
+                'success': True,
+                'user_info': user,
+                'message': 'User created successfully'
+            }
+        else:
+            print(f"❌ Failed to create user for {phone_number}")
+            return {
+                'success': False,
+                'error': 'Failed to create user in database'
+            }
+            
+    except Exception as e:
+        print(f"💥 Error creating user for {phone_number}: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+def update_user_email(user_id: str, email: str) -> dict:
+    """
+    Update user email and set state to 'awaiting_name'
+    
+    Args:
+        user_id (str): The user ID to update
+        email (str): The email address to save
+        
+    Returns:
+        dict: Contains success status and updated user info
+    """
+    try:
+        print(f"📧 Updating email for user {user_id[:8]}... to {email}")
+        
+        response = supabase.table('users') \
+            .update({
+                'email': email,
+                'onboarding_state': 'awaiting_name'
+            }) \
+            .eq('id', user_id) \
+            .execute()
+        
+        if response.data:
+            user = response.data[0]
+            print(f"✅ Updated email for user {user_id[:8]}...")
+            
+            return {
+                'success': True,
+                'user_info': user,
+                'message': 'Email updated successfully'
+            }
+        else:
+            print(f"❌ Failed to update email for user {user_id[:8]}...")
+            return {
+                'success': False,
+                'error': 'Failed to update email in database'
+            }
+            
+    except Exception as e:
+        print(f"💥 Error updating email for user {user_id[:8]}...: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+def update_user_name(user_id: str, name: str) -> dict:
+    """
+    Update user name and set state to 'complete'
+    
+    Args:
+        user_id (str): The user ID to update
+        name (str): The name to save
+        
+    Returns:
+        dict: Contains success status and updated user info
+    """
+    try:
+        print(f"👤 Updating name for user {user_id[:8]}... to {name}")
+        
+        response = supabase.table('users') \
+            .update({
+                'name': name,
+                'onboarding_state': 'complete'
+            }) \
+            .eq('id', user_id) \
+            .execute()
+        
+        if response.data:
+            user = response.data[0]
+            print(f"✅ Updated name for user {user_id[:8]}... - Onboarding complete!")
+            
+            return {
+                'success': True,
+                'user_info': user,
+                'message': 'Name updated successfully, onboarding complete'
+            }
+        else:
+            print(f"❌ Failed to update name for user {user_id[:8]}...")
+            return {
+                'success': False,
+                'error': 'Failed to update name in database'
+            }
+            
+    except Exception as e:
+        print(f"💥 Error updating name for user {user_id[:8]}...: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+def handle_onboarding_flow(incoming_msg: str, sender_number: str, gate_status: dict):
+    """
+    Route onboarding messages based on gate status
+    
+    Args:
+        incoming_msg (str): The incoming SMS message
+        sender_number (str): The phone number of the sender
+        gate_status (dict): Result from check_onboarding_gates()
+    """
+    try:
+        next_gate = gate_status['next_gate']
+        user_info = gate_status.get('user_info')
+        
+        print(f"🚪 Handling onboarding gate: {next_gate}")
+        
+        if next_gate == 'registration':
+            # Gate #1: New user registration
+            print("🆕 Gate #1: New user registration")
+            
+            # Create new user
+            result = create_new_user(sender_number)
+            
+            if result['success']:
+                # Send welcome message
+                welcome_msg = """👋 Welcome to Twin! I'm your intelligent learning assistant that tracks your browsing to help you learn better.
+
+I analyze your web activity and send personalized learning insights via SMS.
+
+To get started, please reply with your email address."""
+                
+                send_result = send_sms(welcome_msg, sender_number)
+                if send_result['success']:
+                    print("✅ Welcome message sent successfully")
+                else:
+                    print(f"❌ Failed to send welcome message: {send_result}")
+            else:
+                # Send error message
+                error_msg = "Sorry, there was an issue setting up your account. Please try again later."
+                send_sms(error_msg, sender_number)
+                print(f"❌ Failed to create user: {result}")
+        
+        elif next_gate == 'email':
+            # Gate #2: Email collection
+            print("📧 Gate #2: Email collection")
+            
+            # Validate email format
+            if validate_email_format(incoming_msg):
+                # Valid email - save it
+                user_id = user_info['id']
+                result = update_user_email(user_id, incoming_msg)
+                
+                if result['success']:
+                    # Send name request message
+                    name_request_msg = "✨ Perfect! Last step - what's your name? This helps me personalize your learning experience."
+                    
+                    send_result = send_sms(name_request_msg, sender_number)
+                    if send_result['success']:
+                        print("✅ Name request sent successfully")
+                    else:
+                        print(f"❌ Failed to send name request: {send_result}")
+                else:
+                    # Send error message
+                    error_msg = "Sorry, there was an issue saving your email. Please try again."
+                    send_sms(error_msg, sender_number)
+                    print(f"❌ Failed to update email: {result}")
+            else:
+                # Invalid email format
+                invalid_email_msg = "❌ That email format doesn't look right. Please send a valid email address (example: you@gmail.com)"
+                
+                send_result = send_sms(invalid_email_msg, sender_number)
+                if send_result['success']:
+                    print("✅ Invalid email message sent successfully")
+                else:
+                    print(f"❌ Failed to send invalid email message: {send_result}")
+        
+        elif next_gate == 'name':
+            # Gate #3: Name collection
+            print("👤 Gate #3: Name collection")
+            
+            # Any non-empty string is valid for name
+            name = incoming_msg.strip()
+            if name:
+                user_id = user_info['id']
+                result = update_user_name(user_id, name)
+                
+                if result['success']:
+                    # Send completion message
+                    completion_msg = f"🎉 All set, {name}! I'm now your personal learning assistant. I'll track your browsing patterns and send helpful insights.\n\nTry sending me a YouTube video or website URL to get started!"
+                    
+                    send_result = send_sms(completion_msg, sender_number)
+                    if send_result['success']:
+                        print("✅ Onboarding completion message sent successfully")
+                    else:
+                        print(f"❌ Failed to send completion message: {send_result}")
+                else:
+                    # Send error message
+                    error_msg = "Sorry, there was an issue saving your name. Please try again."
+                    send_sms(error_msg, sender_number)
+                    print(f"❌ Failed to update name: {result}")
+            else:
+                # Empty name
+                empty_name_msg = "Please tell me your name so I can personalize your experience."
+                
+                send_result = send_sms(empty_name_msg, sender_number)
+                if send_result['success']:
+                    print("✅ Empty name message sent successfully")
+                else:
+                    print(f"❌ Failed to send empty name message: {send_result}")
+        
+        else:
+            print(f"❓ Unknown gate: {next_gate}")
+            
+    except Exception as e:
+        print(f"💥 Error in handle_onboarding_flow: {e}")
+        # Send generic error message
+        error_msg = "Sorry, something went wrong. Please try again."
+        send_sms(error_msg, sender_number)
 
 def get_user_summaries_between_dates(user_id: str, start_timestamp: str, end_timestamp: str):
     """
@@ -842,14 +1206,145 @@ def api_analyze_users():
 # Cohere Summaries Parsing
 # =============================================================== #
 
+def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, index):
+    """
+    Process a single user's summaries with Cohere in a separate thread
+    
+    Args:
+        user (dict): User data with id, email, phone_number
+        twenty_four_hours_ago (str): ISO timestamp for 24 hours ago
+        results_dict (dict): Shared dictionary to store results
+        index (int): User index for thread naming
+    """
+    thread_name = threading.current_thread().name
+    user_id = user['id']
+    user_email = user.get('email', 'No email')
+    user_phone = user.get('phone_number', None)
+    user_label = user_email if user_email != 'No email' else user_id[:8] + "..."
+    
+    try:
+        print(f"🧵 [{thread_name}] Processing summaries for user: {user_label}")
+        
+        # Skip users without phone numbers
+        if not user_phone:
+            print(f"⚠️ [{thread_name}] Skipping user {user_label} - no phone number available")
+            results_dict[index] = {
+                'user_id': user_id,
+                'user_email': user_email,
+                'success': False,
+                'error': 'No phone number available',
+                'summaries_count': 0,
+                'agent_execution': None
+            }
+            return
+        
+        # Calculate timestamps for past 24 hours
+        from datetime import datetime, timedelta, timezone
+        end_time = datetime.now(timezone.utc)
+        start_time = end_time - timedelta(hours=24)
+        
+        start_timestamp = start_time.isoformat()
+        end_timestamp = end_time.isoformat()
+        
+        # Use the new function to fetch summaries for this user from the past 24 hours
+        user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
+        
+        if not user_summaries['success'] or not user_summaries['user_found']:
+            print(f'❌ [{thread_name}] Error fetching summaries for {user_label}: {user_summaries.get("error", "Unknown error")}')
+            results_dict[index] = {
+                'user_id': user_id,
+                'user_email': user_email,
+                'success': False,
+                'error': user_summaries.get('error', 'Error fetching summaries'),
+                'summaries_count': 0,
+                'agent_execution': None
+            }
+            return
+        
+        summaries_count = user_summaries['summaries_count']
+        summaries = user_summaries['summaries']
+        all_summaries_text = user_summaries['combined_summaries_text']
+        
+        print(f"📊 [{thread_name}] Found {summaries_count} summaries for {user_label} in the past 24 hours")
+        
+        # Process each summary for this user
+        user_result = {
+            'user_id': user_id,
+            'user_email': user_email,
+            'user_phone': user_phone,
+            'success': True,
+            'summaries_count': summaries_count,
+            'summaries': summaries,  # Already formatted by the new function
+            'agent_execution': None
+        }
+        
+        # Execute Cohere agent if we have summaries to analyze
+        if summaries_count > 0:
+            print(f"🤖 [{thread_name}] Executing Cohere agent for {user_label} with {summaries_count} summaries")
+            
+            # Create prompt for the agent to determine what clarification is needed
+            agent_prompt = f"""
+                I have analyzed this user's recent learning activities and generated the following summaries. Please review them and determine what additional clarification, follow-up questions, or deeper insights would be most helpful for their learning journey.
+
+                User's Recent Learning Summaries (Past 24 hours):
+                {all_summaries_text}
+
+                Your task:
+                1. Analyze the learning patterns and topics from these summaries
+                2. Identify areas where the user might benefit from clarification, deeper understanding, or follow-up resources
+                3. Send targeted SMS messages with:
+                - Specific questions to help them reflect on their learning
+                - Suggestions for related topics they should explore
+                - Resources or next steps that would enhance their understanding
+                - Any gaps in their learning that could be addressed
+
+                Be proactive and helpful - send multiple focused SMS messages (2-4 messages) with actionable insights and questions that will advance their learning. Keep each SMS concise but valuable.
+
+                Focus on being a learning assistant that helps them:
+                - Connect concepts they've been studying
+                - Identify knowledge gaps
+                - Suggest next steps in their learning journey
+                - Ask thought-provoking questions about the material they've encountered
+                """
+
+            try:
+                agent_result = execute_cohere_agent(agent_prompt, user_phone)
+                user_result['agent_execution'] = agent_result
+                print(f"✅ [{thread_name}] Agent execution completed for {user_label}")
+                print(f"📱 [{thread_name}] SMS messages sent: {agent_result.get('sms_count', 0)}")
+                
+            except Exception as agent_error:
+                print(f"❌ [{thread_name}] Agent execution failed for {user_label}: {str(agent_error)}")
+                user_result['agent_execution'] = {
+                    'success': False,
+                    'error': str(agent_error)
+                }
+        else:
+            print(f"⏩ [{thread_name}] No summaries found for {user_label}, skipping agent execution")
+        
+        results_dict[index] = user_result
+        
+    except Exception as e:
+        print(f'💥 [{thread_name}] Error processing summaries for {user_label}: {str(e)}')
+        results_dict[index] = {
+            'user_id': user_id,
+            'user_email': user_email,
+            'user_phone': user_phone,
+            'success': False,
+            'error': str(e),
+            'summaries_count': 0,
+            'agent_execution': None
+        }
+
+
 def process_user_summaries():
     """
-    Iterate through all users and fetch their summaries from the past 24 hours
+    Iterate through all users and fetch their summaries from the past 24 hours with threading
     
     Returns:
         dict: Contains status and processing results
     """
-    print("🔍 Starting user summaries processing...")
+    print("🔍 Starting multi-threaded user summaries processing...")
     
     try:
         # Calculate 24 hours ago timestamp
@@ -872,128 +1367,41 @@ def process_user_summaries():
         if not users:
             return {'success': True, 'message': 'No users found', 'results': []}
         
-        results = []
+        # Create shared dictionary for results and threads
+        results_dict = {}
+        threads = []
+        max_threads = min(len(users), 3)  # Limit to 3 concurrent threads to avoid overwhelming APIs
         
-        # Process each user
-        for user in users:
-            user_id = user['id']
-            user_email = user.get('email', 'No email')
-            user_phone = user.get('phone_number', None)
-            user_label = user_email if user_email != 'No email' else user_id[:8] + "..."
+        print(f"🧵 Creating up to {max_threads} threads for processing...")
+        
+        # Process users in batches to manage thread count
+        for i, user in enumerate(users):
+            # Wait for some threads to complete if we hit the limit
+            if len(threads) >= max_threads:
+                # Wait for some threads to complete before starting new ones
+                for thread in threads[:max_threads//2]:
+                    thread.join()
+                threads = [t for t in threads if t.is_alive()]
             
-            print(f"🔍 Processing summaries for user: {user_label}")
+            # Create and start thread for this user
+            thread = threading.Thread(
+                target=process_single_user_summaries,
+                args=(user, twenty_four_hours_ago, results_dict, i),
+                name=f"SummaryThread-{i+1}"
+            )
+            thread.start()
+            threads.append(thread)
             
-            # Skip users without phone numbers
-            if not user_phone:
-                print(f"⚠️ Skipping user {user_label} - no phone number available")
-                results.append({
-                    'user_id': user_id,
-                    'user_email': user_email,
-                    'success': False,
-                    'error': 'No phone number available',
-                    'summaries_count': 0,
-                    'agent_execution': None
-                })
-                continue
-            
-            try:
-                # Calculate timestamps for past 24 hours
-                from datetime import datetime, timedelta, timezone
-                end_time = datetime.now(timezone.utc)
-                start_time = end_time - timedelta(hours=24)
-                
-                start_timestamp = start_time.isoformat()
-                end_timestamp = end_time.isoformat()
-                
-                # Use the new function to fetch summaries for this user from the past 24 hours
-                user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
-                
-                if not user_summaries['success'] or not user_summaries['user_found']:
-                    print(f'❌ Error fetching summaries for {user_label}: {user_summaries.get("error", "Unknown error")}')
-                    results.append({
-                        'user_id': user_id,
-                        'user_email': user_email,
-                        'success': False,
-                        'error': user_summaries.get('error', 'Error fetching summaries'),
-                        'summaries_count': 0,
-                        'agent_execution': None
-                    })
-                    continue
-                
-                summaries_count = user_summaries['summaries_count']
-                summaries = user_summaries['summaries']
-                all_summaries_text = user_summaries['combined_summaries_text']
-                
-                print(f"📊 Found {summaries_count} summaries for {user_label} in the past 24 hours")
-                
-                # Process each summary for this user
-                user_result = {
-                    'user_id': user_id,
-                    'user_email': user_email,
-                    'user_phone': user_phone,
-                    'success': True,
-                    'summaries_count': summaries_count,
-                    'summaries': summaries,  # Already formatted by the new function
-                    'agent_execution': None
-                }
-                
-                # Execute Cohere agent if we have summaries to analyze
-                if summaries_count > 0:
-                    print(f"🤖 Executing Cohere agent for {user_label} with {summaries_count} summaries")
-                    
-                    # Create prompt for the agent to determine what clarification is needed
-                    agent_prompt = f"""
-                        I have analyzed this user's recent learning activities and generated the following summaries. Please review them and determine what additional clarification, follow-up questions, or deeper insights would be most helpful for their learning journey.
-
-                        User's Recent Learning Summaries (Past 24 hours):
-                        {all_summaries_text}
-
-                        Your task:
-                        1. Analyze the learning patterns and topics from these summaries
-                        2. Identify areas where the user might benefit from clarification, deeper understanding, or follow-up resources
-                        3. Send targeted SMS messages with:
-                        - Specific questions to help them reflect on their learning
-                        - Suggestions for related topics they should explore
-                        - Resources or next steps that would enhance their understanding
-                        - Any gaps in their learning that could be addressed
-
-                        Be proactive and helpful - send multiple focused SMS messages (2-4 messages) with actionable insights and questions that will advance their learning. Keep each SMS concise but valuable.
-
-                        Focus on being a learning assistant that helps them:
-                        - Connect concepts they've been studying
-                        - Identify knowledge gaps
-                        - Suggest next steps in their learning journey
-                        - Ask thought-provoking questions about the material they've encountered
-                        """
-
-                    try:
-                        agent_result = execute_cohere_agent(agent_prompt, user_phone)
-                        user_result['agent_execution'] = agent_result
-                        print(f"✅ Agent execution completed for {user_label}")
-                        print(f"📱 SMS messages sent: {agent_result.get('sms_count', 0)}")
-                        
-                    except Exception as agent_error:
-                        print(f"❌ Agent execution failed for {user_label}: {str(agent_error)}")
-                        user_result['agent_execution'] = {
-                            'success': False,
-                            'error': str(agent_error)
-                        }
-                else:
-                    print(f"⏩ No summaries found for {user_label}, skipping agent execution")
-                
-                results.append(user_result)
-                
-            except Exception as e:
-                print(f'💥 Error processing summaries for {user_label}: {str(e)}')
-                results.append({
-                    'user_id': user_id,
-                    'user_email': user_email,
-                    'user_phone': user_phone,
-                    'success': False,
-                    'error': str(e),
-                    'summaries_count': 0,
-                    'agent_execution': None
-                })
+            # Small delay to stagger API calls
+            time.sleep(0.5)
+        
+        # Wait for all threads to complete
+        print(f"⏳ Waiting for all {len(threads)} threads to complete...")
+        for thread in threads:
+            thread.join()
+        
+        # Convert results dict to list (preserving original order)
+        results = [results_dict[i] for i in range(len(users)) if i in results_dict]
         
         # Summary statistics
         total_summaries = sum(r.get('summaries_count', 0) for r in results)
@@ -1001,7 +1409,7 @@ def process_user_summaries():
         successful_agent_executions = len([r for r in results if r.get('agent_execution', {}).get('success', False)])
         total_sms_sent = sum(r.get('agent_execution', {}).get('sms_count', 0) for r in results)
         
-        print(f"🎉 Processing complete!")
+        print(f"🎉 Multi-threaded processing complete!")
         print(f"📈 Total summaries processed: {total_summaries}")
         print(f"✅ Successful users: {successful_users}/{len(users)}")
         print(f"🤖 Successful agent executions: {successful_agent_executions}")
@@ -1294,58 +1702,68 @@ def sms_reply():
                     direction_emoji = "📤" if msg['direction'] == 'inbound' else "📥"
                     print(f"   {i+1}. {direction_emoji} {msg['from']} → {msg['to']}: {msg['body'][:50]}{'...' if len(msg['body']) > 50 else ''}")
         
-        # Fetch user summaries from the past 36 hours
-        user_lookup = get_user_by_phone_number(sender_number)
+        # CHECK ONBOARDING GATES FIRST
+        print(f"🚪 Checking onboarding gates...")
+        gate_status = check_onboarding_gates(sender_number)
         
-        if user_lookup['success'] and user_lookup['user_found']:
-            # Calculate timestamps for past 36 hours
-            from datetime import datetime, timedelta, timezone
-            end_time = datetime.now(timezone.utc)
-            start_time = end_time - timedelta(hours=36)
+        if gate_status['onboarding_complete']:
+            print(f"✅ Onboarding complete - proceeding with normal flow")
             
-            start_timestamp = start_time.isoformat()
-            end_timestamp = end_time.isoformat()
+            # Existing flow: Fetch user summaries and create intelligent context
+            user_lookup = get_user_by_phone_number(sender_number)
             
-            user_id = user_lookup['user_info']['id']
-            user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
-            
-            if user_summaries['success']:
-                summaries_count = user_summaries['summaries_count']
-                user_info = user_lookup['user_info']
+            if user_lookup['success'] and user_lookup['user_found']:
+                # Calculate timestamps for past 36 hours
+                from datetime import datetime, timedelta, timezone
+                end_time = datetime.now(timezone.utc)
+                start_time = end_time - timedelta(hours=36)
                 
-                print(f"🧠 User Learning Context:")
-                print(f"   User: {user_info.get('email', 'No email')} ({sender_number})")
-                print(f"   Learning summaries: {summaries_count} in past 36 hours")
+                start_timestamp = start_time.isoformat()
+                end_timestamp = end_time.isoformat()
                 
-                # Show recent learning topics
-                if user_summaries['summaries']:
-                    print(f"📝 Recent learning summaries:")
-                    for i, summary in enumerate(user_summaries['summaries'][:3]):  # Show last 3 summaries
-                        summary_preview = summary['summary_text'][:100] + '...' if len(summary['summary_text']) > 100 else summary['summary_text']
-                        print(f"   {i+1}. {summary['prompt_generated_at'][:10]}: {summary_preview}")
+                user_id = user_lookup['user_info']['id']
+                user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
+                
+                if user_summaries['success']:
+                    summaries_count = user_summaries['summaries_count']
+                    user_info = user_lookup['user_info']
+                    
+                    print(f"🧠 User Learning Context:")
+                    print(f"   User: {user_info.get('email', 'No email')} ({sender_number})")
+                    print(f"   Learning summaries: {summaries_count} in past 36 hours")
+                    
+                    # Show recent learning topics
+                    if user_summaries['summaries']:
+                        print(f"📝 Recent learning summaries:")
+                        for i, summary in enumerate(user_summaries['summaries'][:3]):  # Show last 3 summaries
+                            summary_preview = summary['summary_text'][:100] + '...' if len(summary['summary_text']) > 100 else summary['summary_text']
+                            print(f"   {i+1}. {summary['prompt_generated_at'][:10]}: {summary_preview}")
+                else:
+                    print(f"ℹ️  No learning summaries available for user {user_lookup['user_info']['email']}")
+                    user_summaries = None
             else:
-                print(f"ℹ️  No learning summaries available for user {user_lookup['user_info']['email']}")
+                print(f"ℹ️  No user found for phone number {sender_number}")
+                user_summaries = None
+
+            # Create intelligent prompt for Cohere agent
+            context_prompt = create_intelligent_response_prompt(
+                incoming_message=incoming_msg,
+                sender_number=sender_number,
+                message_history=message_history if message_history['success'] else None,
+                user_summaries=user_summaries if user_summaries and user_summaries['success'] else None
+            )
+            
+            # Execute intelligent agent with context
+            execute_cohere_agent(context_prompt, to_number=sender_number)
+            
         else:
-            print(f"ℹ️  No user found for phone number {sender_number}")
+            print(f"🚪 Onboarding required - handling gate: {gate_status['next_gate']}")
+            # Handle onboarding flow
+            handle_onboarding_flow(incoming_msg, sender_number, gate_status)
 
-
-        # Create intelligent prompt for Cohere agent
-        context_prompt = create_intelligent_response_prompt(
-            incoming_message=incoming_msg,
-            sender_number=sender_number,
-            message_history=message_history if message_history['success'] else None,
-            user_summaries=user_summaries if user_lookup['success'] and user_summaries['success'] else None
-        )
-        
         # Create a TwiML response
         resp = MessagingResponse()
-
-        # Don't send immediate response - let agent handle it
-        # resp.message(f"your message was: {incoming_msg}")
-
-        # Execute intelligent agent with context
-        execute_cohere_agent(context_prompt, to_number=sender_number)
-
+        
         print(f"✅ Sending TwiML response back to Twilio")
         
         # Return TwiML response
