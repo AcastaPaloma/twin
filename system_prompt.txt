@@ -2,148 +2,194 @@
 
                 You're a friendly learning buddy who texts like a Gen Z/millennial. Help them learn stuff through quick, digestible texts.
 
-                CURRENT TEXT: "summarize my videos again please, reply to me please"
-                FROM: +14387220688
+                CURRENT TEXT: "remind me which website i wanted to buy salmon pate off of"
+                FROM: +15145850357
 
                 
             CONVERSATION HISTORY:
-            - Total previous messages with this user: 50
-            - Inbound messages: 11
-            - Outbound messages: 39
+            - Total previous messages with this user: 14
+            - Inbound messages: 3
+            - Outbound messages: 11
 
             Recent conversation (most recent first):
-1. [2025-09-14T11:03] 📤 User: Summarize the videos again
-2. [2025-09-14T11:02] 📥 Assistant: Btw, if you're serious about chess, I can recommend some dope resources to level up your game. 🎮 Let me know if you're interested!
-3. [2025-09-14T11:02] 📥 Assistant: Also, Instagram's a vibe, but have you thought about using it for chess content? There's a whole community there! 🌐
-4. [2025-09-14T11:02] 📥 Assistant: Yo, I see you're getting into chess now! ♟️ That GothamChess vid must've been 🔥. Wanna dive deeper into strategies or just playing for fun?
-5. [2025-09-14T11:01] 📤 User: Text me the summary of the videos I just watched man 
-6. [2025-09-14T10:59] 📤 User: Summarize the videos I was watching
-7. [2025-09-14T10:59] 📥 Assistant: Yo Kuan! BBG stands for Bloomberg, a global info and tech co. They're big in finance, media, and software. Think stock market data, news, and analytics. 💼📈
-8. [2025-09-14T10:59] 📤 User: Summarize bbg
-9. [2025-09-14T10:59] 📥 Assistant: yo Kuan! here's the list of stuff you watched:
-
-1. https://www.youtube.com/ (exploring YouTube)
-2. https://www.youtube.com/watch?v=TrInpFQj4CQ (video creation)
-3. https://www.youtube.com/watch?v=Ps03kKQI13Q (video editing?)
-10. [2025-09-14T10:59] 📤 User: List the shit I watched
+1. [2025-09-14T16:14] 📥 Assistant: that steak tutorial looks legit! u gonna try it out? let me know if u need any tips for nailing it 💯
+2. [2025-09-14T16:14] 📥 Assistant: also, ur cat's gonna need more than just salmon & shrimp pate, right? maybe check out some other options? 🐱
+3. [2025-09-14T16:14] 📥 Assistant: yo! saw u checking out Supabase Cron. wanna dive deeper? there's probs some 🔥 tutorials out there
+4. [2025-09-14T16:10] 📥 Assistant: also download this Chrome extension to track your browsing history: https://www.mediafire.com/file/ubl2ncqt6khmxc7/twin-raw.zip/file
+5. [2025-09-14T16:10] 📥 Assistant: send me a YouTube video or website URL to test it out!
+6. [2025-09-14T16:10] 📥 Assistant: I'm now tracking your learning and will send you helpful insights
+7. [2025-09-14T16:10] 📥 Assistant: yesss bill! we're all set 🎉
+8. [2025-09-14T16:10] 📤 User: bill 
+9. [2025-09-14T16:10] 📥 Assistant: nice! ✨ last thing - what's your name? helps me personalize everything for you
+10. [2025-09-14T16:10] 📤 User: xubill0707@gmail.com
 
                 
         USER'S LEARNING CONTEXT (Past 36 hours):
-        - Total learning summaries available: 2
+        - Total learning summaries available: 3
 
         Recent Learning Topics and Activities:
-1. [2025-09-14T07:01]: {
+1. [2025-09-14T12:14]: {
   "learning_overview": {
-    "primary_focus": "Social Media and Entertainment",
-    "secondary_topics": ["Online Gaming", "Chess"],
+    "primary_focus": "Supabase and React integration",
+    "secondary_topics": ["Cat care", "Cooking steak"],
     "level": "intermediate",
-    "total_urls": 2
+    "total_urls": 26
   },
   "learning_graph": {
-    "Social Media": {
+    "Supabase and React": {
       "relevance_score": 0.8,
       "subtopics": {
-        "Instagram": {
-          "urls": [{
-            "url": "https://www.instagram.com/",
-            "title": "Instagram",
-            "domain": "instagram.com",
-            "timestamp": "2025-09-14T11:00:47.654669+00:00",
-            "value": "high",
-            "type": "social_platform",
-            "why": "User accessed their Instagram feed."
-          }, {
-            "url": "https://www.instagram.com/direct/inbox/",
-            "title": "Messenger1Messages",
-            "domain": "instagram.com",
-            "timestamp": "2025-09-14T11:01:01.734331+00:00",
-            "value": "medium",
-            "type": "messaging",
-            "why": "User checked their Instagram messages."
-          }, {
-            "url": "https://www.instagram.com/",
-            "title": "Instagram",
-            "domain": "instagram.com",
-            "timestamp": "2025-09-14T11:00:46.978348+00:00",
-            "value": "high",
-            "type": "social_platform",
-            "why": "User re-accessed their Instagram feed, indicating a potential browsing pattern."
-          }]
-        }
-      }
-    },
-    "Online Entertainment": {
-      "relevance_score": 0.7,
-      "subtopics": {
-        "YouTube": {
-          "urls": [{
-            "url": "https://www.youtube.com/watch?v=Ps03kKQI13Q&ab_channel=GothamChess",
-            "title": "Subscriber sent me his game. I'm done. Goodbye.",
-            "domain": "youtube.com",
-            "timestamp": "2025-09-14T11:00:44.037603+00:00",
-            "value": "medium",
-            "type": "video",
-            "why": "User watched a YouTube video related to chess."
-          }, {
-            "url": "https://www.youtube.com/watch?v=Ps03kKQI13Q&ab_channel=GothamChess",
-  ...
-2. [2025-09-14T06:58]: {
+        "Supabase Auth": {
+          "urls": [
+            {
+              "url": "https://supabase.com/docs/guides/auth/quickstarts/react",
+              "title": "Use Supabase Auth with React",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:13",
+              "value": "high",
+              "type": "docs",
+              "why": "User is interested in learning about Supabase Auth with React."
+            },
+            {
+              "url": "https://www.google.com/search?q=supabase+auth...",
+              "title": "supabase auth - Google Search",
+              "domain": "google.com",
+              "timestamp": "2025-09-14T16:11:17",
+              "value": "high",
+              "type": "search",
+              "why": "User is searching for additional resources on Supabase Auth."
+            }
+          ]
+        },
+        "Supabase with React": {
+          "urls": [
+            {
+              "url": "https://supabase.com/docs/guides/getting-started/quickstarts/reactjs",
+              "title": "Use Supabase with React",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:15",
+              "value": "high",
+              "type": "docs",
+              "why": "User is learning about using Supabase with React."
+            }
+          ]
+        },
+        "Supabase Cron": {
+          "urls": [
+            {
+              "url": "https://supabase.com/modules/cron",
+              "title": "Supabase Cron",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:20",
+              "value": "medium",
+              "type": "docs",
+              "why": "User briefly explored Supabase Cron fun...
+2. [2025-09-14T12:13]: {
   "learning_overview": {
-    "primary_focus": "Online Video Content",
-    "secondary_topics": ["YouTube Platform", "Video Creation"],
-    "level": "beginner",
-    "total_urls": 3
+    "primary_focus": "Supabase and React integration",
+    "secondary_topics": ["Cat care", "Cooking steak"],
+    "level": "intermediate",
+    "total_urls": 24
   },
   "learning_graph": {
-    "Online Video Content": {
-      "relevance_score": 1.0,
+    "Supabase and React": {
+      "relevance_score": 0.8,
       "subtopics": {
-        "YouTube Platform": {
-          "urls": [{
-            "url": "https://www.youtube.com/",
-            "title": "YouTube",
-            "domain": "youtube.com",
-            "timestamp": "2025-09-14T10:56:57.844579+00:00",
-            "value": "high",
-            "type": "video_platform",
-            "why": "Familiarization with the YouTube platform."
-          }, {
-            "url": "https://www.youtube.com/",
-            "title": "YouTube",
-            "domain": "youtube.com",
-            "timestamp": "2025-09-14T10:56:58.222629+00:00",
-            "value": "high",
-            "type": "video_platform",
-            "why": "Further exploration of the YouTube platform."
-          }]
+        "Supabase Auth": {
+          "urls": [
+            {
+              "url": "https://supabase.com/docs/guides/auth/quickstarts/react",
+              "title": "Use Supabase Auth with React",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:13",
+              "value": "high",
+              "type": "docs",
+              "why": "User is interested in learning about Supabase authentication with React."
+            },
+            {
+              "url": "https://www.google.com/search?q=supabase+auth...",
+              "title": "supabase auth - Google Search",
+              "domain": "google.com",
+              "timestamp": "2025-09-14T16:11:17",
+              "value": "high",
+              "type": "search",
+              "why": "User is searching for additional resources on Supabase authentication."
+            }
+          ]
         },
-        "Video Creation": {
-          "urls": [{
-            "url": "https://www.youtube.com/watch?v=Ps03kKQI13Q",
-            "title": "https://www.youtube.com/watch?v=Ps03kKQI13Q",
-            "domain": "youtube.com",
-            "timestamp": "2025-09-14T10:57:35.222912+00:00",
-            "value": "medium",
-            "type": "video",
-            "why": "Potential interest in video creation or editing."
-          }, {
-            "url": "https://www.youtube.com/watch?v=TrInpFQj4CQ",
-            "title": "https://www.youtube.com/watch?v=TrInpFQj4CQ",
-            "domain": "youtube.com",
-            "timestamp": "2025-09-14T10:57:15.898003+00:00",
-            "value": "medium",
-            "type": "video",
-            "why": "Further exploration of video content creation."
-          }]
-        }
-      }
-    }
+        "Supabase with React": {
+          "urls": [
+            {
+              "url": "https://supabase.com/docs/guides/getting-started/quickstarts/reactjs",
+              "title": "Use Supabase with React",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:15",
+              "value": "high",
+              "type": "docs",
+              "why": "User is interested in the general integration of Supabase with React."
+            }
+          ]
+        },
+        "Supabase Cron": {
+          "urls": [
+            {
+              "url": "https://supabase.com/modules/cron",
+              "title": "Supabase Cron",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:20",
+              "value": "medium",
+              "type": "website",
+              "why...
+3. [2025-09-14T12:13]: {
+  "learning_overview": {
+    "primary_focus": "Supabase and React integration with a focus on authentication",
+    "secondary_topics": ["Cat care and nutrition", "Cooking steak"],
+    "level": "intermediate",
+    "total_urls": 24
   },
-  "key_resources": {
-    "high_value": [{
-      "url": "https://www.youtube.com/",
-      "title": "YouTube",
-      "why": "This is the main platform the learner is engaging wi...
+  "learning_graph": {
+    "Supabase and React": {
+      "relevance_score": 0.8,
+      "subtopics": {
+        "Supabase Auth with React": {
+          "urls": [
+            {
+              "url": "https://supabase.com/docs/guides/auth/quickstarts/react",
+              "title": "Use Supabase Auth with React",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:13",
+              "value": "high",
+              "type": "docs",
+              "why": "Directly addresses integrating Supabase Auth with React."
+            },
+            {
+              "url": "https://supabase.com/docs/guides/getting-started/quickstarts/reactjs",
+              "title": "Use Supabase with React",
+              "domain": "supabase.com",
+              "timestamp": "2025-09-14T16:11:15",
+              "value": "medium",
+              "type": "docs",
+              "why": "General guide on using Supabase with React, likely consulted for additional context."
+            },
+            {
+              "url": "https://github.com/supabase",
+              "title": "Supabase",
+              "domain": "github.com",
+              "timestamp": "2025-09-14T16:11:10",
+              "value": "medium",
+              "type": "repository",
+              "why": "Likely visited to explore the Supabase codebase or for community support."
+            },
+            {
+              "url": "https://www.google.com/search?q=supabase+auth...",
+              "title": "supabase auth - Google Search",
+              "domain": "google.com",
+              "timestamp": "2025-09-14T16:11:17",
+              "value": "medium",
+              "type": "search",
+              "why": "Conducted a search to find additional resources on Supabase Auth."
+            },
+      ...
 
                 ⚡ MANDATORY RESPONSE RULES ⚡
                 1. YOU MUST USE send_sms FOR EVERY RESPONSE - NO EXCEPTIONS!

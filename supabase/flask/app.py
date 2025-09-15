@@ -17,6 +17,20 @@ from datetime import datetime
 # Load environment variables from .env file
 load_dotenv()
 
+# =============================================================== #
+# LOGGING CONFIGURATION - Set to False for minimal logging
+# =============================================================== #
+VERBOSE_LOGGING = False  # Set to False to reduce logging output for analyze_users and process_summaries
+
+def log_verbose(message: str):
+    """Print message only if verbose logging is enabled"""
+    if VERBOSE_LOGGING:
+        print(message)
+
+def log_always(message: str):
+    """Always print important messages regardless of verbose setting"""
+    print(message)
+
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
@@ -987,7 +1001,7 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
     user_label = user_email or user_id[:8] + "..."
     
     try:
-        print(f"🧵 [{thread_name}] Starting analysis for user {user_label}")
+        log_verbose(f"🧵 [{thread_name}] Starting analysis for user {user_label}")
         
         # Get unprocessed activities for this user
         unprocessed_response = supabase.table('activities') \
@@ -997,14 +1011,14 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
             .execute()
             
         if unprocessed_response.data is None:
-            print(f'❌ [{thread_name}] Error fetching unprocessed activities for {user_label}')
+            log_always(f'❌ [{thread_name}] Error fetching unprocessed activities for {user_label}')
             return
             
         unprocessed_activities = unprocessed_response.data
-        print(f"📊 [{thread_name}] Found {len(unprocessed_activities)} unprocessed activities for {user_label}")
+        log_always(f"📊 [{thread_name}] Found {len(unprocessed_activities)} unprocessed activities for {user_label}")
         
         if not unprocessed_activities or len(unprocessed_activities) == 0:
-            print(f"⏩ [{thread_name}] No unprocessed activities for {user_label}, skipping")
+            log_always(f"⏩ [{thread_name}] No unprocessed activities for {user_label}, skipping")
             return
         
         # Check if most recent activity is too recent (within minimum_inactivity seconds)
@@ -1036,10 +1050,10 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
             if most_recent_timestamp:
                 time_since_recent = now - most_recent_timestamp
                 if time_since_recent.total_seconds() < minimum_inactivity:
-                    print(f"⏰ [{thread_name}] Skipping {user_label} - most recent activity was {time_since_recent.total_seconds():.1f} seconds ago (< {minimum_inactivity})")
+                    log_verbose(f"⏰ [{thread_name}] Skipping {user_label} - most recent activity was {time_since_recent.total_seconds():.1f} seconds ago (< {minimum_inactivity})")
                     return
                 else:
-                    print(f"✅ [{thread_name}] Most recent activity for {user_label} was {time_since_recent.total_seconds():.1f} seconds ago, proceeding with processing")
+                    log_verbose(f"✅ [{thread_name}] Most recent activity for {user_label} was {time_since_recent.total_seconds():.1f} seconds ago, proceeding with processing")
             
             
         # Create detailed activity descriptions for Cohere
@@ -1121,7 +1135,7 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
 
                 Return ONLY JSON."""
         
-        print(f"🤖 [{thread_name}] Calling Cohere API for {user_label}...")
+        log_verbose(f"🤖 [{thread_name}] Calling Cohere API for {user_label}...")
         
         # Call Cohere API
         response = co.chat(
@@ -1135,7 +1149,7 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
             response_format={"type": "json_object"},
         )
         
-        print(f"✅ [{thread_name}] Received Cohere response for {user_label}")
+        log_verbose(f"✅ [{thread_name}] Received Cohere response for {user_label}")
         
         # Extract text content from Cohere response
         summary_text = ""
@@ -1198,7 +1212,7 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
         summary_insert_response = supabase.table('summaries').insert([summary_payload]).execute()
         
         if summary_insert_response.data:
-            print(f'💾 [{thread_name}] Summary saved for {user_label}')
+            log_verbose(f'💾 [{thread_name}] Summary saved for {user_label}')
             
             # Mark activities as processed
             activity_ids = [a['id'] for a in unprocessed_activities]
@@ -1208,14 +1222,14 @@ def process_user_with_cohere(user_id, user_email=None, check_recent_activity=Tru
                 .execute()
                 
             if update_response.data:
-                print(f'✅ [{thread_name}] Marked {len(activity_ids)} activities as processed for {user_label}')
+                log_verbose(f'✅ [{thread_name}] Marked {len(activity_ids)} activities as processed for {user_label}')
             else:
-                print(f'⚠️ [{thread_name}] Failed to mark activities as processed for {user_label}')
+                log_verbose(f'⚠️ [{thread_name}] Failed to mark activities as processed for {user_label}')
         else:
-            print(f'❌ [{thread_name}] Error saving summary for {user_label}:', summary_insert_response)
+            log_always(f'❌ [{thread_name}] Error saving summary for {user_label}:', summary_insert_response)
             
     except Exception as e:
-        print(f'💥 [{thread_name}] Error processing user {user_label}: {str(e)}')
+        log_always(f'💥 [{thread_name}] Error processing user {user_label}: {str(e)}')
 
 
 def analyze_all_users():
@@ -1225,19 +1239,19 @@ def analyze_all_users():
     Returns:
         str: Status message indicating success or failure
     """
-    print("🔍 Starting multi-threaded user analysis...")
+    log_always("🔍 Starting multi-threaded user analysis...")
     
     try:
         # Fetch all users
-        print("📋 Fetching all users...")
+        log_verbose("📋 Fetching all users...")
         users_response = supabase.table('users').select('id, email').execute()
         
         if users_response.data is None:
-            print('❌ Error fetching users:', users_response)
+            log_always('❌ Error fetching users:', users_response)
             return f"Error fetching users"
             
         users = users_response.data
-        print(f"✅ Found {len(users)} users to process")
+        log_always(f"✅ Found {len(users)} users to process")
         
         if not users:
             return "No users found to process"
@@ -1246,7 +1260,7 @@ def analyze_all_users():
         threads = []
         max_threads = min(len(users), 5)  # Limit to 5 concurrent threads to avoid overwhelming APIs
         
-        print(f"🧵 Creating up to {max_threads} threads for processing...")
+        log_verbose(f"🧵 Creating up to {max_threads} threads for processing...")
         
         for i, user in enumerate(users):
             if i >= max_threads:
@@ -1267,15 +1281,15 @@ def analyze_all_users():
             time.sleep(0.5)
         
         # Wait for all threads to complete
-        print(f"⏳ Waiting for all {len(threads)} threads to complete...")
+        log_verbose(f"⏳ Waiting for all {len(threads)} threads to complete...")
         for thread in threads:
             thread.join()
         
-        print("🎉 All users processed!")
+        log_always("🎉 All users processed!")
         return f"✅ Successfully processed {len(users)} users with threading"
         
     except Exception as error:
-        print('💥 Fatal error in analyze_all_users:', error)
+        log_always('💥 Fatal error in analyze_all_users:', error)
         return f"Fatal error: {error}"
 
 
@@ -1341,11 +1355,11 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
     user_label = user_email if user_email != 'No email' else user_id[:8] + "..."
     
     try:
-        print(f"🧵 [{thread_name}] Processing summaries for user: {user_label}")
+        log_verbose(f"🧵 [{thread_name}] Processing summaries for user: {user_label}")
         
         # Skip users without phone numbers
         if not user_phone:
-            print(f"⚠️ [{thread_name}] Skipping user {user_label} - no phone number available")
+            log_verbose(f"⚠️ [{thread_name}] Skipping user {user_label} - no phone number available")
             results_dict[index] = {
                 'user_id': user_id,
                 'user_email': user_email,
@@ -1369,7 +1383,7 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
         user_summaries = get_user_summaries_between_dates(user_id, start_timestamp, end_timestamp)
         
         if not user_summaries['success'] or not user_summaries['user_found']:
-            print(f'❌ [{thread_name}] Error fetching summaries for {user_label}: {user_summaries.get("error", "Unknown error")}')
+            log_always(f'❌ [{thread_name}] Error fetching summaries for {user_label}: {user_summaries.get("error", "Unknown error")}')
             results_dict[index] = {
                 'user_id': user_id,
                 'user_email': user_email,
@@ -1387,10 +1401,10 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
         unprocessed_summaries = user_summaries['unprocessed_summaries']
         all_summaries_text = user_summaries['combined_summaries_text']
         
-        print(f"📊 [{thread_name}] Found {summaries_count} total summaries ({unprocessed_count} unprocessed) for {user_label} in the past 24 hours")
+        log_always(f"📊 [{thread_name}] Found {summaries_count} total summaries ({unprocessed_count} unprocessed) for {user_label} in the past 24 hours")
         
         # Fetch recent message history for context
-        print(f"📞 [{thread_name}] Fetching message history for {user_label} to provide conversation context")
+        log_verbose(f"📞 [{thread_name}] Fetching message history for {user_label} to provide conversation context")
         message_history = get_message_history(user_phone, limit=20)  # Get last 20 messages for context
         
         # Process each summary for this user
@@ -1408,7 +1422,7 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
         
         # Only execute Cohere agent if we have unprocessed summaries to analyze
         if unprocessed_count > 0:
-            print(f"🤖 [{thread_name}] Executing Cohere agent for {user_label} with {unprocessed_count} unprocessed summaries")
+            log_always(f"🤖 [{thread_name}] Executing Cohere agent for {user_label} with {unprocessed_count} unprocessed summaries")
             
             # Separate new (unprocessed) summaries from old (processed) ones for better context
             new_summaries_text = ""
@@ -1483,13 +1497,13 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
             try:
                 agent_result = execute_cohere_agent(agent_prompt, user_phone)
                 user_result['agent_execution'] = agent_result
-                print(f"✅ [{thread_name}] Agent execution completed for {user_label}")
+                log_verbose(f"✅ [{thread_name}] Agent execution completed for {user_label}")
                 
                 sms_count = agent_result.get('sms_count', 0)
                 if sms_count > 0:
-                    print(f"📱 [{thread_name}] SMS messages sent: {sms_count}")
+                    log_always(f"📱 [{thread_name}] SMS messages sent: {sms_count}")
                 else:
-                    print(f"🤐 [{thread_name}] Agent decided not to send SMS (content may be repetitive or not substantial enough)")
+                    log_always(f"🤐 [{thread_name}] Agent decided not to send SMS (content may be repetitive or not substantial enough)")
                 
                 # Mark unprocessed summaries as processed after successful agent execution
                 if agent_result.get('success', False):
@@ -1502,28 +1516,28 @@ def process_single_user_summaries(user, twenty_four_hours_ago, results_dict, ind
                                 .execute()
                             
                             if update_response.data:
-                                print(f"✅ [{thread_name}] Marked {len(unprocessed_ids)} summaries as processed for {user_label}")
+                                log_verbose(f"✅ [{thread_name}] Marked {len(unprocessed_ids)} summaries as processed for {user_label}")
                                 user_result['summaries_marked_processed'] = len(unprocessed_ids)
                             else:
-                                print(f"⚠️ [{thread_name}] Failed to mark summaries as processed for {user_label}")
+                                log_verbose(f"⚠️ [{thread_name}] Failed to mark summaries as processed for {user_label}")
                                 user_result['summaries_marked_processed'] = 0
                     except Exception as mark_error:
-                        print(f"❌ [{thread_name}] Error marking summaries as processed for {user_label}: {str(mark_error)}")
+                        log_verbose(f"❌ [{thread_name}] Error marking summaries as processed for {user_label}: {str(mark_error)}")
                         user_result['summaries_marked_processed'] = 0
                 
             except Exception as agent_error:
-                print(f"❌ [{thread_name}] Agent execution failed for {user_label}: {str(agent_error)}")
+                log_always(f"❌ [{thread_name}] Agent execution failed for {user_label}: {str(agent_error)}")
                 user_result['agent_execution'] = {
                     'success': False,
                     'error': str(agent_error)
                 }
         else:
-            print(f"⏩ [{thread_name}] No unprocessed summaries found for {user_label}, skipping agent execution")
+            log_always(f"⏩ [{thread_name}] No unprocessed summaries found for {user_label}, skipping agent execution")
         
         results_dict[index] = user_result
         
     except Exception as e:
-        print(f'💥 [{thread_name}] Error processing summaries for {user_label}: {str(e)}')
+        log_always(f'💥 [{thread_name}] Error processing summaries for {user_label}: {str(e)}')
         results_dict[index] = {
             'user_id': user_id,
             'user_email': user_email,
@@ -1543,25 +1557,25 @@ def process_user_summaries():
     Returns:
         dict: Contains status and processing results
     """
-    print("🔍 Starting multi-threaded user summaries processing...")
+    log_always("🔍 Starting multi-threaded user summaries processing...")
     
     try:
         # Calculate 24 hours ago timestamp
         from datetime import datetime, timedelta
         twenty_four_hours_ago = (datetime.now() - timedelta(hours=24)).isoformat()
         
-        print(f"📅 Looking for summaries created after: {twenty_four_hours_ago}")
+        log_verbose(f"📅 Looking for summaries created after: {twenty_four_hours_ago}")
         
         # Fetch all users with phone numbers
-        print("📋 Fetching all users...")
+        log_verbose("📋 Fetching all users...")
         users_response = supabase.table('users').select('id, email, phone_number').execute()
         
         if users_response.data is None:
-            print('❌ Error fetching users:', users_response)
+            log_always('❌ Error fetching users:', users_response)
             return {'success': False, 'error': 'Error fetching users'}
             
         users = users_response.data
-        print(f"✅ Found {len(users)} users to process")
+        log_always(f"✅ Found {len(users)} users to process")
         
         if not users:
             return {'success': True, 'message': 'No users found', 'results': []}
@@ -1571,7 +1585,7 @@ def process_user_summaries():
         threads = []
         max_threads = min(len(users), 3)  # Limit to 3 concurrent threads to avoid overwhelming APIs
         
-        print(f"🧵 Creating up to {max_threads} threads for processing...")
+        log_verbose(f"🧵 Creating up to {max_threads} threads for processing...")
         
         # Process users in batches to manage thread count
         for i, user in enumerate(users):
@@ -1595,7 +1609,7 @@ def process_user_summaries():
             time.sleep(0.5)
         
         # Wait for all threads to complete
-        print(f"⏳ Waiting for all {len(threads)} threads to complete...")
+        log_verbose(f"⏳ Waiting for all {len(threads)} threads to complete...")
         for thread in threads:
             thread.join()
         
@@ -1605,12 +1619,12 @@ def process_user_summaries():
         # Check for any missing results due to thread failures
         missing_results = len(users) - len(results_dict)
         if missing_results > 0:
-            print(f"⚠️ Warning: {missing_results} users had no results (possible thread failures)")
+            log_always(f"⚠️ Warning: {missing_results} users had no results (possible thread failures)")
         
         # Summary statistics - filter out any None results from threading issues
         valid_results = [r for r in results if r is not None]
         if len(valid_results) < len(results):
-            print(f"⚠️ Warning: Filtered out {len(results) - len(valid_results)} None results")
+            log_always(f"⚠️ Warning: Filtered out {len(results) - len(valid_results)} None results")
         total_summaries = sum(r.get('summaries_count', 0) for r in valid_results)
         total_unprocessed = sum(r.get('unprocessed_count', 0) for r in valid_results)
         successful_users = len([r for r in valid_results if r.get('success', False)])
@@ -1624,16 +1638,16 @@ def process_user_summaries():
         agent_decided_to_skip = successful_agent_executions - agent_decided_to_message
         total_message_history_entries = sum(r.get('message_history_count', 0) for r in valid_results)
         
-        print(f"🎉 Multi-threaded processing complete!")
-        print(f"📈 Total summaries found: {total_summaries}")
-        print(f"🔄 Total unprocessed summaries: {total_unprocessed}")
-        print(f"✅ Successful users: {successful_users}/{len(valid_results)} (processed {len(valid_results)}/{len(users)} total users)")
-        print(f"🤖 Successful agent executions: {successful_agent_executions}")
-        print(f"📱 Agent decided to send messages: {agent_decided_to_message}/{users_with_unprocessed} users with new content")
-        print(f"🤐 Agent decided to skip messaging: {agent_decided_to_skip} (smart filtering)")
-        print(f"📱 Total SMS messages sent: {total_sms_sent}")
-        print(f"💬 Total conversation history entries: {total_message_history_entries}")
-        print(f"✅ Summaries marked as processed: {total_summaries_marked_processed}")
+        log_always(f"🎉 Multi-threaded processing complete!")
+        log_always(f"📈 Total summaries found: {total_summaries}")
+        log_always(f"🔄 Total unprocessed summaries: {total_unprocessed}")
+        log_always(f"✅ Successful users: {successful_users}/{len(valid_results)} (processed {len(valid_results)}/{len(users)} total users)")
+        log_verbose(f"🤖 Successful agent executions: {successful_agent_executions}")
+        log_always(f"📱 Agent decided to send messages: {agent_decided_to_message}/{users_with_unprocessed} users with new content")
+        log_verbose(f"🤐 Agent decided to skip messaging: {agent_decided_to_skip} (smart filtering)")
+        log_always(f"📱 Total SMS messages sent: {total_sms_sent}")
+        log_verbose(f"💬 Total conversation history entries: {total_message_history_entries}")
+        log_verbose(f"✅ Summaries marked as processed: {total_summaries_marked_processed}")
         
         return {
             'success': True,
@@ -1656,8 +1670,8 @@ def process_user_summaries():
     except Exception as error:
         import traceback
         error_details = traceback.format_exc()
-        print('💥 Fatal error in process_user_summaries:', error)
-        print('📍 Error traceback:', error_details)
+        log_always('💥 Fatal error in process_user_summaries:', error)
+        log_verbose('📍 Error traceback:', error_details)
         return {
             'success': False,
             'error': f"Fatal error: {str(error)}",
@@ -2117,7 +2131,7 @@ if __name__ == '__main__':
     elif test_mode == "analyze":
         test_analyze_users()
     elif test_mode == "server":
-        app.run(debug=True, host='0.0.0.0', port=3067)
+        app.run(debug=False, host='0.0.0.0', port=3067, threaded=True)
     else:
         print("Invalid test mode. Choose 'agent', 'summaries', 'analyze', 'intelligent', or 'server'")
 
